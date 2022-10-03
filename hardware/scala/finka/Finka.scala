@@ -16,6 +16,7 @@ package finka
 import vexriscv.plugin._
 import vexriscv._
 import vexriscv.ip.{DataCacheConfig, InstructionCacheConfig}
+
 import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.amba3.apb._
@@ -41,6 +42,7 @@ import spinal.lib.bus.regif.Document.JsonGenerator
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
 
+// SpinalCorundum
 import corundum._
 
 case class FinkaConfig(axiFrequency : HertzNumber,
@@ -175,7 +177,7 @@ object FinkaConfig{
             uinstretAccess = CsrAccess.NONE
           )
         ),
-        new YamlPlugin("cpu0.yaml")
+        new YamlPlugin("cpu0.yaml") // @TODO Maybe rename to Finka.yaml everywhere?
       )
     )
     config
@@ -217,6 +219,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val timerExternal = in(PinsecTimerCtrlExternal())
     val coreInterrupt = in Bool()
 
+    /* register interface to IP address lookup update interface */
     val update0 = out UInt(32 bits)
     val update1 = out UInt(32 bits)
     val update2 = out UInt(32 bits)
@@ -448,11 +451,13 @@ class Finka(val config: FinkaConfig) extends Component{
   io.update6 := prefix.regs(6)
   io.do_update := prefix.do_update
 
+  // write packets
   val packet = new ClockingArea(packetClockDomain) {
     val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
 
     val ctrl = new Axi4SlaveFactory(packetAxi4Bus)
 
+    // write into 512 bits register
     val stream_word = Reg(Bits(512 bits))
     ctrl.writeMultiWord(stream_word, 0xC01000, documentation = null)
 
