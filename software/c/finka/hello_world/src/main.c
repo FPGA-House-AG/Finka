@@ -53,17 +53,24 @@ void main() {
 		*((volatile uint32_t *)AXI_M1 + 0x00/4 + i) = i * 0x11;
 	}
 #endif
-#if 1 // packet
-	int len = (512/32) + 8;
+#if 1 // packet generation
+	// note that the packets are always a multiple of 32-bit or 4-bytes
+	// this is a limitation in the packet generator IP. For Wireguard,
+	// this is no limitation
+	// todo read from hardware
+	const int corundumDataWidth = 64;
+	// length of the packet to be generated, in words
+	int len = (corundumDataWidth/32) + 1;
+	// iterate over all words of the packet
 	for (int w = 0; w < len; w++) {
-		int addr = w % (512/32);
+		int addr = w % (corundumDataWidth/32);
 		*((volatile uint32_t *)AXI_M1 + 0x1000/4 + addr) = w;
 		/* last 32-bit word, assert VALID and TLAST to write to TX FIFO */
 		if (w == (len - 1)) {
 			// valid=1, tlast=1
 			*((volatile uint32_t *)AXI_M1 + 0x1044/4) = 1;
 		/* last 32-bit word of a 512-bit word, assert VALID to write to TX FIFO */
-		} else if (addr == ((512/32) - 1)) {
+		} else if (addr == ((corundumDataWidth/32) - 1)) {
 			// valid=1, tlast=0
 			*((volatile uint32_t *)AXI_M1 + 0x1040/4) = 1;
 		}

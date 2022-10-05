@@ -50,15 +50,23 @@ case class FinkaConfig(axiFrequency : HertzNumber,
                        onChipRamHexFile : String,
                        cpuPlugins : ArrayBuffer[Plugin[VexRiscv]],
                        uartCtrlConfig : UartCtrlMemoryMappedConfig,
-                       pcieAxi4Config : Axi4Config)
+                       pcieAxi4Config : Axi4Config,
+                       corundumDataWidth : Int)
 
 object FinkaConfig{
 
   def default = {
     val config = FinkaConfig(
+      corundumDataWidth = 64,
       axiFrequency = 250 MHz,
       onChipRamSize = 64 kB,
       onChipRamHexFile = null, //"software/c/finka/hello_world/build/hello_world.hex",
+
+      /* prot signals but no last signal - however SpinalHDL/Axi4 assumes Last for Axi4* classes */
+      pcieAxi4Config = Axi4Config(addressWidth = 32, dataWidth = 32, idWidth = 0, useId = false, useRegion = false, 
+        useBurst = false, useLock = false, useCache = false, useSize = false, useQos = false,
+        useLen = false, useLast = true/*fails otherwise*/, useResp = true, useProt = true, useStrb = true),
+
       uartCtrlConfig = UartCtrlMemoryMappedConfig(
         uartCtrlConfig = UartCtrlGenerics(
           dataWidthMax      = 8,
@@ -70,10 +78,6 @@ object FinkaConfig{
         txFifoDepth = 16,
         rxFifoDepth = 16
       ),
-      /* prot signals but no last signal - however SpinalHDL/Axi4 assumes Last for Axi4* classes */
-      pcieAxi4Config = Axi4Config(addressWidth = 32, dataWidth = 32, idWidth = 0, useId = false, useRegion = false, 
-        useBurst = false, useLock = false, useCache = false, useSize = false, useQos = false,
-        useLen = false, useLast = true/*fails otherwise*/, useResp = true, useProt = true, useStrb = true),
       cpuPlugins = ArrayBuffer(
         //new PcManagerSimplePlugin(0x00800000L, false),
         //          new IBusSimplePlugin(
@@ -231,6 +235,9 @@ class Finka(val config: FinkaConfig) extends Component{
 
     val update = out UInt(64 bits)
     val commit = out Bool()
+
+    // in packetClk clock domain
+    val master0 = master Stream new Fragment(CorundumFrame(corundumDataWidth))
   }
 
   val resetCtrlClockDomain = ClockDomain(
@@ -451,14 +458,14 @@ class Finka(val config: FinkaConfig) extends Component{
   io.update6 := prefix.regs(6)
   io.do_update := prefix.do_update
 
-  // write packets
+  // packet generator
   val packet = new ClockingArea(packetClockDomain) {
     val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
 
     val ctrl = new Axi4SlaveFactory(packetAxi4Bus)
 
-    // write into 512 bits register
-    val stream_word = Reg(Bits(512 bits))
+    // write into wide (512-bits?) register
+    val stream_word = Reg(Bits(corundumDataWidth bits))
     ctrl.writeMultiWord(stream_word, 0xC01000, documentation = null)
 
     // match a range of addresses using mask
@@ -476,7 +483,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val reg_idx = ((ctrl.writeAddress & 0xFFF) / 4)
 
     // set (per-byte) tkeep bits for all 32-bit registers being written
-    val tkeep = Reg(Bits(512 / 8 bits)) init (0)
+    val tkeep = Reg(Bits(corundumDataWidth / 8 bits)) init (0)
     when (isAddressed()) {
       val reg_idx = (ctrl.writeAddress - 0x00) >> 2
       tkeep := tkeep
@@ -502,8 +509,18 @@ class Finka(val config: FinkaConfig) extends Component{
     }
     val strb = RegNext(ctrl.writeByteEnable);
 
-    val mux = CorundumFrameMuxPrio(8);
+    val corundum = Stream Fragment(CorundumFrame(corundumDataWidth))
+    corundum.last := tlast
+    corundum.valid := valid
+    corundum.payload.tdata := stream_word
+    corundum.payload.tkeep := tkeep
+    corundum.payload.tuser := 0
+    val fifo = new StreamFifo(Fragment(CorundumFrame(corundumDataWidth)), 4)
+    fifo.io.push << corundum
+    val corundumpop = Stream Fragment(CorundumFrame(corundumDataWidth))
+    corundumpop << fifo.io.pop
   }
+  io.master0 << packet.corundumpop
 
   val axi2packetCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
   axi2packetCDC.io.input << axi.packetAxiSharedBus
@@ -575,10 +592,12 @@ object FinkaSim {
       onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
     )
 
-    val simConfig = SimConfig.allOptimisation/*.withWave*/
-
+    val simConfig = SimConfig.allOptimisation
+    //.withFstWave
     simConfig.compile{
       val dut = new Finka(socConfig)
+
+      // expose internal signals
 
       //dut.prefix.reg_idx.simPublic()
       //dut.prefix.regs.simPublic()
@@ -591,11 +610,16 @@ object FinkaSim {
       dut.packet.commit2.simPublic()
       dut.packet.valid.simPublic()
       dut.packet.tlast.simPublic()
-      //dut.packet.ctrl.writeByteEnable.simPublic()
+
+      dut.packet.ctrl.writeByteEnable.simPublic()
+      dut.packet.fifo.io.pop.last.simPublic()
+      /* return dut */
       dut
-    }.doSimUntilVoid{dut =>
+    }
+    .doSimUntilVoid{dut =>
       // SimConfig.allOptimisation.withWave.compile
       val mainClkPeriod = (1e12/dut.config.axiFrequency.toDouble).toLong
+      val packetClkPeriod = (1e12/322e6).toLong
       val jtagClkPeriod = mainClkPeriod * 4/* this must be 4 (maybe more, not less) */
       val uartBaudRate = 115200
       val uartBaudPeriod = (1e12/uartBaudRate).toLong
@@ -604,7 +628,7 @@ object FinkaSim {
       axiClockDomain.forkStimulus(mainClkPeriod)
 
       val packetClockDomain = ClockDomain(dut.io.packetClk)
-      packetClockDomain.forkStimulus((1e12/322e6).toLong)
+      packetClockDomain.forkStimulus(packetClkPeriod)
 
       val tcpJtag = JtagTcp(
         jtag = dut.io.jtag,
@@ -623,6 +647,9 @@ object FinkaSim {
 
       dut.io.coreInterrupt #= false
 
+      dut.io.master0.ready #= true
+
+
       var commits_seen = 0
       // run 0.1 second after done
       var cycles_post = 100000
@@ -638,7 +665,7 @@ object FinkaSim {
           commits_seen += 1
         }
         //if (dut.prefix.committed.toBoolean) {
-        if (dut.io.do_update.toBoolean) {
+        if (dut.io.do_update.toBoolean && false) {
           printf("REG0 : %X\n", dut.io.update0.toLong)
           printf("REG1 : %X\n", dut.io.update1.toLong)
           printf("REG2 : %X\n", dut.io.update2.toLong)
@@ -649,18 +676,25 @@ object FinkaSim {
         }
         //printf("commit2 : %X\n", dut.packet.commit2.toBoolean.toInt)
 
-        if (dut.packet.commit2.toBoolean) {
+        if (dut.packet.commit2.toBoolean && false) {
           printf("REG# : %X\n", dut.packet.reg_idx.toLong)
-          printf("STREAM : %08X\n", dut.packet.stream_word.toBigInt)
-          printf("TKEEP : %016X\n", dut.packet.tkeep.toBigInt)
+          //printf("STREAM : %08X\n", dut.packet.stream_word.toBigInt)
+          //printf("TKEEP : %016X\n", dut.packet.tkeep.toBigInt)
         }
-        if (dut.packet.valid.toBoolean) {
-          printf("*VALID == %d\n", dut.packet.valid.toBoolean.toInt);
-          printf("*TLAST == %d\n", dut.packet.tlast.toBoolean.toInt);
+        if (dut.packet.valid.toBoolean && false) {
+          printf("*VALID == %d\n", dut.packet.valid.toBoolean.toInt)
+          printf("*TLAST == %d\n", dut.packet.tlast.toBoolean.toInt)
           printf("*REG# : %X\n", dut.packet.reg_idx.toLong)
           printf("*STREAM : %08X\n", dut.packet.stream_word.toBigInt)
           printf("*TKEEP : %016X\n", dut.packet.tkeep.toBigInt)
         }
+        if (dut.io.master0.valid.toBoolean) {
+          printf("*VALID == %d\n", dut.io.master0.valid.toBoolean.toInt)
+          printf("*TLAST == %d\n", dut.io.master0.last.toBoolean.toInt)
+          printf("*TDATA == %016X\n", dut.io.master0.payload.tdata.toBigInt)
+          printf("*TKEEP == %02X\n", dut.io.master0.payload.tkeep.toBigInt)
+        }
+
         packetClockDomain.waitRisingEdge()
         if (commits_seen > 4) cycles_post -= 1
         if (cycles_post == 0) simSuccess()
