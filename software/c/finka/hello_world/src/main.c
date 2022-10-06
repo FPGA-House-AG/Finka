@@ -36,13 +36,48 @@ Uart_Config uart_cfg = {
   .clockDivider = 250000000/8/115200-1
 };
 
+void packet_send(uint32_t *p, int len)
+{
+	if (len == 0) return;
+
+	uint32_t corundumDataWidth = *((volatile uint32_t *)AXI_M1 + 0x1020/4);
+
+	int remaining = len;
+	int word_num = 0;
+
+	uint32_t space = 0;
+
+	// iterate over all 32-bit data words of the packet, except the last word
+	while (remaining > sizeof(uint32_t)) {
+		while (space == 0) {
+			space = *((volatile uint32_t *)AXI_M1 + 0x1040/4);
+		}
+		int addr = word_num % (corundumDataWidth / 32);
+		*((volatile uint32_t *)AXI_M1 + 0x1100/4 + addr) = p[word_num];
+		word_num += 1;
+		remaining -= 4;
+		space--;
+	}
+	// { remaining is in range [0-4] }
+	if (remaining > 0)
+	/* last 32-bit word */
+	{
+		while (space == 0) {
+			space = *((volatile uint32_t *)AXI_M1 + 0x1040/4);
+		}
+		int addr = word_num % (corundumDataWidth / 32);
+		/* last 32-bit word, assert TLAST and indicate empty bytes */
+		*((volatile uint32_t *)AXI_M1 + 0x1080/4) = sizeof(uint32_t) - remaining;
+		*((volatile uint32_t *)AXI_M1 + 0x1100/4 + addr) = p[word_num];
+	}
+}
+
 void main() {
 	uart_applyConfig(UART, &uart_cfg);
     //println("Hello world! I am Finka.");
 
     uint32_t identifier = *((volatile uint32_t *)AXI_M1 + 0x1000/4);
     uint32_t version = *((volatile uint32_t *)AXI_M1 + 0x1000/4);
-    uint32_t dataWidth = *((volatile uint32_t *)AXI_M1 + 0x1020/4);
 
 #if 0
 	*((volatile uint32_t *)AXI_M1) = 0xaabbccddU;
@@ -63,21 +98,18 @@ void main() {
 	// this is a limitation in the packet generator IP. For Wireguard,
 	// this is no limitation
 	// todo read from hardware
-	const int corundumDataWidth = dataWidth;
-	// length of the packet to be generated, in 32-bit words
-	int len = (corundumDataWidth / 32) + 1;
-	// iterate over all words of the packet
-	int w = 0;
-	for (; w < (len - 1); w++) {
-		int addr = w % (corundumDataWidth / 32);
-		*((volatile uint32_t *)AXI_M1 + 0x1100/4 + addr) = w;
+
+	static uint32_t packet[512];
+	uint8_t *ptr = (uint8_t *)packet;
+	for (int i = 0; i < 512 * 4; i++) {
+		ptr[i] = i;
 	}
-	/* last 32-bit word */
-	{
-		int addr = w % (corundumDataWidth / 32);
-		/* last 32-bit word, assert TLAST */
-		*((volatile uint32_t *)AXI_M1 + 0x1080/4) = 1;
-		*((volatile uint32_t *)AXI_M1 + 0x1100/4 + addr) = w;
+
+	uint32_t corundumDataWidth = *((volatile uint32_t *)AXI_M1 + 0x1020/4);
+
+	//int packet_len = (corundumDataWidth/8)*2+1;
+	for (int packet_len = 1; packet_len <= (corundumDataWidth/8)*2+1; packet_len++) {
+	  packet_send(packet, packet_len);
 	}
 	//*((volatile uint32_t *)AXI_M1 + 0x18/4) = 0xbabecafeU;
 	//*((volatile uint32_t *)AXI_M1 + 0x18/4) = 0xbabecafeU;
