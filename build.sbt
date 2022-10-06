@@ -1,4 +1,5 @@
-val spinalVersion = "1.6.5"
+val spinalVersion = "1.7.3"
+val spinalDir = "../SpinalHDL.upstream"
 
 lazy val root = (project in file("."))
   .settings(
@@ -10,7 +11,7 @@ lazy val root = (project in file("."))
       )
     ),
     // two lines need to use IDSL plug-in from local ../SpinalHDL/
-    scalacOptions += s"-Xplugin:${new File(baseDirectory.value + s"/../SpinalHDL/idslplugin/target/scala-2.11/spinalhdl-idsl-plugin_2.11-$spinalVersion.jar")}",
+    scalacOptions += s"-Xplugin:${new File(baseDirectory.value + s"/" + spinalDir + s"/idslplugin/target/scala-2.11/spinalhdl-idsl-plugin_2.11-$spinalVersion.jar")}",
     scalacOptions += s"-Xplugin-require:idsl-plugin",
     libraryDependencies ++= Seq(
       // three lines replaced by dependsOn(spinal*) below
@@ -29,10 +30,10 @@ lazy val root = (project in file("."))
 
 //, spinalHdlIdslPlugin, spinalHdlSim, spinalHdlCore, spinalHdlLib
 
-lazy val spinalHdlCore = ProjectRef(file("../SpinalHDL"), "core") // 88579afcef46effb1597177e6f7dd5ca860b0aef
-lazy val spinalHdlLib = ProjectRef(file("../SpinalHDL"), "lib")
-lazy val spinalHdlIdslPlugin = ProjectRef(file("../SpinalHDL"), "idslplugin")
-lazy val spinalHdlSim = ProjectRef(file("../SpinalHDL"), "sim")
+lazy val spinalHdlCore = ProjectRef(file(spinalDir), "core") // 88579afcef46effb1597177e6f7dd5ca860b0aef
+lazy val spinalHdlLib = ProjectRef(file(spinalDir), "lib")
+lazy val spinalHdlIdslPlugin = ProjectRef(file(spinalDir), "idslplugin")
+lazy val spinalHdlSim = ProjectRef(file(spinalDir), "sim")
 
 lazy val vexRiscv = RootProject(file("../VexRiscv.pinned")) // bc3c59cd20b702ef3247a56cb4868be4f45b26ad
 lazy val spinalCorundum = RootProject(file("../SpinalCorundum")) // fcecdbb6456ee29f4d64e43d2682555d1d68ddef
