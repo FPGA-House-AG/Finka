@@ -57,7 +57,7 @@ object FinkaConfig{
 
   def default = {
     val config = FinkaConfig(
-      corundumDataWidth = 64,
+      corundumDataWidth = 128,
       axiFrequency = 250 MHz,
       onChipRamSize = 64 kB,
       onChipRamHexFile = null, //"software/c/finka/hello_world/build/hello_world.hex",
@@ -75,8 +75,8 @@ object FinkaConfig{
           samplingSize      = 5,
           postSamplingSize  = 2
         ),
-        txFifoDepth = 16,
-        rxFifoDepth = 16
+        txFifoDepth = 256,
+        rxFifoDepth = 256
       ),
       cpuPlugins = ArrayBuffer(
         //new PcManagerSimplePlugin(0x00800000L, false),
@@ -462,66 +462,15 @@ class Finka(val config: FinkaConfig) extends Component{
   val packet = new ClockingArea(packetClockDomain) {
     val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
 
-    val ctrl = new Axi4SlaveFactory(packetAxi4Bus)
+    val packetWriter = CorundumFrameWriterAxi4(corundumDataWidth, Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
 
-    // write into wide (512-bits?) register
-    val stream_word = Reg(Bits(corundumDataWidth bits))
-    ctrl.writeMultiWord(stream_word, 0xC01000, documentation = null)
-
-    // match a range of addresses using mask
-    import spinal.lib.bus.misc.MaskMapping
-
-    // writing packet word content?
-    def isAddressed(): Bool = {
-      val mask_mapping = MaskMapping(0xFFFFC0L/*64 addresses, 16 32-bit regs*/, 0xC01000L)
-      val ret = False
-      ctrl.onWritePrimitive(address = mask_mapping, false, ""){ ret := True }
-      ret
-    }
-    val commit2 = RegNext(isAddressed())
-
-    val reg_idx = ((ctrl.writeAddress & 0xFFF) / 4)
-
-    // set (per-byte) tkeep bits for all 32-bit registers being written
-    val tkeep = Reg(Bits(corundumDataWidth / 8 bits)) init (0)
-    when (isAddressed()) {
-      val reg_idx = (ctrl.writeAddress - 0x00) >> 2
-      tkeep := tkeep
-      //tkeep(reg_idx * 4, 4 bits) := tkeep(reg_idx * 4, 4 bits) | ctrl.writeByteEnable
-      tkeep(reg_idx * 4, 4 bits) := B"1111"
-    }
-    val valid = Bool
-    valid := False
-    // 0x40 VALID=1, TLAST=0
-    ctrl.onWrite(0xC01040L, null){
-      valid := True
-      tkeep := 0
-      stream_word := 0
-    }
-    val tlast = Bool
-    tlast := False
-    // 0x44 VALID=1, TLAST=1
-    ctrl.onWrite(0xC01044L, null){
-      valid := True
-      tlast := True
-      tkeep := 0
-      stream_word := 0
-    }
-    val strb = RegNext(ctrl.writeByteEnable);
-
-    val corundum = Stream Fragment(CorundumFrame(corundumDataWidth))
-    corundum.last := tlast
-    corundum.valid := valid
-    corundum.payload.tdata := stream_word
-    corundum.payload.tkeep := tkeep
-    corundum.payload.tuser := 0
-    val fifo = new StreamFifo(Fragment(CorundumFrame(corundumDataWidth)), 4)
-    fifo.io.push << corundum
-    val corundumpop = Stream Fragment(CorundumFrame(corundumDataWidth))
-    corundumpop << fifo.io.pop
+    // connect to bus
+    packetWriter.io.ctrlbus << packetAxi4Bus
   }
-  io.master0 << packet.corundumpop
+  io.master0 << packet.packetWriter.io.output
 
+  // bring axi.packetAxiSharedBus into packet clock domain
+  // and from Shared to Full bus
   val axi2packetCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
   axi2packetCDC.io.input << axi.packetAxiSharedBus
   packet.packetAxi4Bus << axi2packetCDC.io.output.toAxi4()
@@ -598,21 +547,7 @@ object FinkaSim {
       val dut = new Finka(socConfig)
 
       // expose internal signals
-
-      //dut.prefix.reg_idx.simPublic()
-      //dut.prefix.regs.simPublic()
-      //dut.prefix.committed.simPublic()
-
-      dut.packet.strb.simPublic()
-      dut.packet.reg_idx.simPublic()
-      dut.packet.tkeep.simPublic()
-      dut.packet.stream_word.simPublic()
-      dut.packet.commit2.simPublic()
-      dut.packet.valid.simPublic()
-      dut.packet.tlast.simPublic()
-
-      dut.packet.ctrl.writeByteEnable.simPublic()
-      dut.packet.fifo.io.pop.last.simPublic()
+      dut.packet.packetWriter.bridge.commit2.simPublic()
       /* return dut */
       dut
     }
@@ -649,7 +584,6 @@ object FinkaSim {
 
       dut.io.master0.ready #= true
 
-
       var commits_seen = 0
       // run 0.1 second after done
       var cycles_post = 100000
@@ -657,6 +591,10 @@ object FinkaSim {
       packetClockDomain.waitSampling(1)
 
       while (true) {
+        //if (dut.packet.packetWriter.bridge.commit2.toBoolean) {
+        //  println("COMMIT2PACKET")
+        //}
+
         if (dut.io.commit.toBoolean) {
           println("COMMIT #", commits_seen)
           //printf("STRB : %04d\n", dut.prefix.ctrl.writeByteEnable.toLong.toBinaryString.toInt)
@@ -674,30 +612,22 @@ object FinkaSim {
           printf("REG5 : %X\n", dut.io.update5.toLong)
           printf("REG6 : %X\n", dut.io.update6.toLong)
         }
-        //printf("commit2 : %X\n", dut.packet.commit2.toBoolean.toInt)
 
-        if (dut.packet.commit2.toBoolean && false) {
-          printf("REG# : %X\n", dut.packet.reg_idx.toLong)
-          //printf("STREAM : %08X\n", dut.packet.stream_word.toBigInt)
-          //printf("TKEEP : %016X\n", dut.packet.tkeep.toBigInt)
-        }
-        if (dut.packet.valid.toBoolean && false) {
-          printf("*VALID == %d\n", dut.packet.valid.toBoolean.toInt)
-          printf("*TLAST == %d\n", dut.packet.tlast.toBoolean.toInt)
-          printf("*REG# : %X\n", dut.packet.reg_idx.toLong)
-          printf("*STREAM : %08X\n", dut.packet.stream_word.toBigInt)
-          printf("*TKEEP : %016X\n", dut.packet.tkeep.toBigInt)
-        }
         if (dut.io.master0.valid.toBoolean) {
-          printf("*VALID == %d\n", dut.io.master0.valid.toBoolean.toInt)
-          printf("*TLAST == %d\n", dut.io.master0.last.toBoolean.toInt)
-          printf("*TDATA == %016X\n", dut.io.master0.payload.tdata.toBigInt)
-          printf("*TKEEP == %02X\n", dut.io.master0.payload.tkeep.toBigInt)
+          printf("*VALID == %X\n", dut.io.master0.valid.toBoolean.toInt)
+          printf("*TLAST == %X\n", dut.io.master0.last.toBoolean.toInt)
+          // 4 bits per printf hex nibble
+          val dw = dut.config.corundumDataWidth/4
+          // one keep bit per byte, 4 bits per printf hex nibble
+          val kw = dut.config.corundumDataWidth/8/4
+          printf(s"*TDATA == 0x%0${dw}X\n", dut.io.master0.payload.tdata.toBigInt)
+          printf(s"*TKEEP == 0x%0${kw}X\n", dut.io.master0.payload.tkeep.toBigInt)
         }
 
         packetClockDomain.waitRisingEdge()
         if (commits_seen > 4) cycles_post -= 1
         if (cycles_post == 0) simSuccess()
+        if (commits_seen > 3) simSuccess()
       }
       simSuccess()
     }
