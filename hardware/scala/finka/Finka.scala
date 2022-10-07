@@ -547,7 +547,7 @@ object FinkaSim {
       val dut = new Finka(socConfig)
 
       // expose internal signals
-      dut.packet.packetWriter.bridge.commit2.simPublic()
+
       /* return dut */
       dut
     }
@@ -617,9 +617,9 @@ object FinkaSim {
           printf("*VALID == %X\n", dut.io.master0.valid.toBoolean.toInt)
           printf("*TLAST == %X\n", dut.io.master0.last.toBoolean.toInt)
           // 4 bits per printf hex nibble
-          val dw = dut.config.corundumDataWidth/4
+          val dw = dut.config.corundumDataWidth / 4
           // one keep bit per byte, 4 bits per printf hex nibble
-          val kw = dut.config.corundumDataWidth/8/4
+          val kw = dut.config.corundumDataWidth / 8 / 4
           printf(s"*TDATA == 0x%0${dw}X\n", dut.io.master0.payload.tdata.toBigInt)
           printf(s"*TKEEP == 0x%0${kw}X\n", dut.io.master0.payload.tkeep.toBigInt)
         }
