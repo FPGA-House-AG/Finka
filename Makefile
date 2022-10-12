@@ -28,6 +28,9 @@ rtl:
 	# make -j8 -C software/c/finka/hello_world clean all DEBUG=yes
 	sbt "runMain finka.FinkaWithMemoryInit"
 
+repl:
+	sbt "~runMain finka.FinkaWithMemoryInit"
+
 # run in terminal #1
 sim: #use_dev_spinal
 	set -e

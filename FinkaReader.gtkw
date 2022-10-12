@@ -1,0 +1,77 @@
+[*]
+[*] GTKWave Analyzer v3.3.86 (w)1999-2017 BSI
+[*] Tue Oct 11 11:57:39 2022
+[*]
+[dumpfile] "/home/vexriscv/project/Finka/simWorkspace/Finka/test.fst"
+[dumpfile_mtime] "Tue Oct 11 11:55:09 2022"
+[dumpfile_size] 11963359
+[savefile] "/home/vexriscv/project/Finka/FinkaReader.gtkw"
+[timestart] 0
+[size] 2390 1521
+[pos] -1 -1
+*0.000000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] TOP.
+[treeopen] TOP.Finka.
+[treeopen] TOP.Finka.packet_packetWriter.
+[sst_width] 808
+[signals_width] 498
+[sst_expanded] 1
+[sst_vpaned_height] 466
+@201
+-FIFO IN
+@22
+TOP.Finka.packet_packetWriter.writer.io_input_payload_fragment_tdata[127:0]
+TOP.Finka.packet_packetWriter.writer.io_input_payload_fragment_tkeep[15:0]
+@28
+TOP.Finka.packet_packetWriter.writer.io_input_payload_fragment_tuser
+TOP.Finka.packet_packetWriter.writer.io_input_payload_last
+TOP.Finka.packet_packetWriter.writer.io_input_ready
+TOP.Finka.packet_packetWriter.writer.io_input_valid
+@200
+-
+-FIFO OUT
+@22
+TOP.Finka.packet_packetWriter.writer.io_output_payload_fragment_tdata[127:0]
+TOP.Finka.packet_packetWriter.writer.io_output_payload_fragment_tkeep[15:0]
+@28
+TOP.Finka.packet_packetWriter.writer.io_output_payload_fragment_tuser
+TOP.Finka.packet_packetWriter.writer.io_output_payload_last
+TOP.Finka.packet_packetWriter.writer.io_output_ready
+TOP.Finka.packet_packetWriter.writer.io_output_valid
+@200
+-
+-AR
+@22
+TOP.Finka.packet_packetWriter.io_ctrlbus_ar_payload_addr[9:0]
+@28
+TOP.Finka.packet_packetWriter.io_ctrlbus_ar_payload_burst[1:0]
+@22
+TOP.Finka.packet_packetWriter.io_ctrlbus_ar_payload_cache[3:0]
+@28
+TOP.Finka.packet_packetWriter.io_ctrlbus_ar_payload_id[1:0]
+@22
+TOP.Finka.packet_packetWriter.io_ctrlbus_ar_payload_len[7:0]
+@28
+TOP.Finka.packet_packetWriter.io_ctrlbus_ar_payload_lock
+TOP.Finka.packet_packetWriter.io_ctrlbus_ar_payload_prot[2:0]
+TOP.Finka.packet_packetWriter.io_ctrlbus_ar_payload_size[2:0]
+TOP.Finka.packet_packetWriter.io_ctrlbus_ar_ready
+TOP.Finka.packet_packetWriter.io_ctrlbus_ar_valid
+@200
+-
+-R
+@22
+TOP.Finka.packet_packetWriter.io_ctrlbus_r_payload_data[31:0]
+@28
+TOP.Finka.packet_packetWriter.io_ctrlbus_r_payload_id[1:0]
+TOP.Finka.packet_packetWriter.io_ctrlbus_r_payload_last
+TOP.Finka.packet_packetWriter.io_ctrlbus_r_payload_resp[1:0]
+TOP.Finka.packet_packetWriter.io_ctrlbus_r_ready
+TOP.Finka.packet_packetWriter.io_ctrlbus_r_valid
+@200
+-
+@28
+TOP.Finka.packet_packetWriter.bridge_corundum_queueWithAvailability.io_availability[2:0]
+TOP.Finka.packet_packetWriter.bridge_corundum_queueWithAvailability.io_occupancy[2:0]
+[pattern_trace] 1
+[pattern_trace] 0

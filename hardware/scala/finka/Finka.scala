@@ -57,7 +57,7 @@ object FinkaConfig{
 
   def default = {
     val config = FinkaConfig(
-      corundumDataWidth = 128,
+      corundumDataWidth = 512,
       axiFrequency = 250 MHz,
       onChipRamSize = 64 kB,
       onChipRamHexFile = null, //"software/c/finka/hello_world/build/hello_world.hex",
@@ -237,7 +237,8 @@ class Finka(val config: FinkaConfig) extends Component{
     val commit = out Bool()
 
     // in packetClk clock domain
-    val master0 = master Stream new Fragment(CorundumFrame(corundumDataWidth))
+    val frametx = master Stream new Fragment(CorundumFrame(corundumDataWidth))
+    val framerx = slave Stream new Fragment(CorundumFrame(corundumDataWidth))
   }
 
   val resetCtrlClockDomain = ClockDomain(
@@ -248,7 +249,7 @@ class Finka(val config: FinkaConfig) extends Component{
   )
 
   val resetCtrl = new ClockingArea(resetCtrlClockDomain) {
-    val systemResetUnbuffered  = False
+    val systemResetUnbuffered = False
     //    val coreResetUnbuffered = False
 
     //Implement an counter to keep the reset axiResetOrder high 64 cycles
@@ -263,9 +264,9 @@ class Finka(val config: FinkaConfig) extends Component{
     }
 
     //Create all reset used later in the design
-    val systemReset  = RegNext(systemResetUnbuffered)
-    val axiReset     = RegNext(systemResetUnbuffered)
-    val packetReset  = RegNext(systemResetUnbuffered)
+    val systemReset  = RegNext(systemResetUnbuffered) //simPublic()
+    val axiReset     = RegNext(systemResetUnbuffered) //simPublic()
+    val packetReset  = RegNext(systemResetUnbuffered) //simPublic()
   }
 
   val axiClockDomain = ClockDomain(
@@ -282,8 +283,13 @@ class Finka(val config: FinkaConfig) extends Component{
 
   val packetClockDomain = ClockDomain(
     clock = io.packetClk,
-    reset = resetCtrl.packetReset /*BufferCC(resetCtrl.systemResetUnbuffered)*/
+    reset = resetCtrl.packetReset
+    //reset = BufferCC(resetCtrl.packetReset)
   )
+
+  val busconfig = Axi4Config(32, 32, 2, useQos = false, useRegion = false)
+  // interconnect is an AXI4 Shared AW/AR bus (SpinalHDL specific)
+  val interconnect = Axi4Shared(busconfig)
 
   val axi = new ClockingArea(axiClockDomain) {
 
@@ -295,14 +301,15 @@ class Finka(val config: FinkaConfig) extends Component{
     )
 
     if (config.onChipRamHexFile != null) {
-      println("Initializing Axi4SharedOnChipRam with ", config.onChipRamHexFile)
+      println("Initializing Axi4SharedOnChipRam with " + config.onChipRamHexFile)
       HexTools.initRam(ram.ram, config.onChipRamHexFile, 0x00800000L)
     } else {
       println("[WARNING] Axi4SharedOnChipRam is NOT initialized.")
     }
 
-    val prefixAxiSharedBus = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
-    val packetAxiSharedBus = Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val prefixAxiSharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val packetTxAxiSharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val packetRxAxiSharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
     val pcieAxiSharedBus = pcieAxi4Bus.toShared()
@@ -356,7 +363,8 @@ class Finka(val config: FinkaConfig) extends Component{
     axiCrossbar.addSlaves(
       ram.io.axi          -> (0x00800000L, onChipRamSize),
       prefixAxiSharedBus  -> (0x00C00000L, 4 kB),
-      packetAxiSharedBus  -> (0x00C01000L, 4 kB),
+      packetTxAxiSharedBus-> (0x00C01000L, 4 kB),
+      packetRxAxiSharedBus-> (0x00C02000L, 4 kB),
       apbBridge.io.axi    -> (0x00F00000L, 1 MB)
     )
 
@@ -365,13 +373,13 @@ class Finka(val config: FinkaConfig) extends Component{
     axiCrossbar.addConnections(
       // CPU instruction bus (read-only master) can only access RAM slave
       core.iBus        -> List(ram.io.axi),
-      // CPU data bus (read-only master) can access all slaves
-      core.dBus        -> List(ram.io.axi, apbBridge.io.axi, prefixAxiSharedBus, packetAxiSharedBus),
-      pcieAxiSharedBus -> List(ram.io.axi, apbBridge.io.axi, prefixAxiSharedBus, packetAxiSharedBus)
+      // CPU data bus can access all slaves
+      core.dBus        -> List(ram.io.axi, apbBridge.io.axi, prefixAxiSharedBus, packetTxAxiSharedBus, packetRxAxiSharedBus),
+      pcieAxiSharedBus -> List(ram.io.axi, apbBridge.io.axi, prefixAxiSharedBus, packetTxAxiSharedBus, packetRxAxiSharedBus)
     )
 
-    /* AXI Peripheral Bus */
-    axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar,bridge) => {
+    /* AXI Peripheral Bus slave */
+    axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar, bridge) => {
       crossbar.sharedCmd.halfPipe() >> bridge.sharedCmd
       crossbar.writeData.halfPipe() >> bridge.writeData
       crossbar.writeRsp             << bridge.writeRsp
@@ -379,22 +387,31 @@ class Finka(val config: FinkaConfig) extends Component{
     })
 
     /* prefix update slave */
-    axiCrossbar.addPipelining(prefixAxiSharedBus)((crossbar,ctrl) => {
+    axiCrossbar.addPipelining(prefixAxiSharedBus)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
       crossbar.readRsp               <<  ctrl.readRsp
     })
 
-    /* packet generator slave */
-    axiCrossbar.addPipelining(packetAxiSharedBus)((crossbar,ctrl) => {
+    /* packet writer slave */
+    axiCrossbar.addPipelining(packetTxAxiSharedBus)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
       crossbar.readRsp               <<  ctrl.readRsp
     })
 
-    axiCrossbar.addPipelining(ram.io.axi)((crossbar,ctrl) => {
+    /* packet reader slave */
+    axiCrossbar.addPipelining(packetRxAxiSharedBus)((crossbar, ctrl) => {
+      crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <<  ctrl.writeRsp
+      crossbar.readRsp               <<  ctrl.readRsp
+    })
+
+    /* instruction and data RAM slave */
+    axiCrossbar.addPipelining(ram.io.axi)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
@@ -402,7 +419,7 @@ class Finka(val config: FinkaConfig) extends Component{
     })
 
     // CPU data bus master
-    axiCrossbar.addPipelining(core.dBus)((cpu,crossbar) => {
+    axiCrossbar.addPipelining(core.dBus)((cpu, crossbar) => {
       cpu.sharedCmd             >>  crossbar.sharedCmd
       cpu.writeData             >>  crossbar.writeData
       cpu.writeRsp              <<  crossbar.writeRsp
@@ -410,7 +427,7 @@ class Finka(val config: FinkaConfig) extends Component{
     })
 
     // PCIe bus master
-    axiCrossbar.addPipelining(pcieAxiSharedBus)((pcie,crossbar) => {
+    axiCrossbar.addPipelining(pcieAxiSharedBus)((pcie, crossbar) => {
       pcie.sharedCmd             >>  crossbar.sharedCmd
       pcie.writeData             >>  crossbar.writeData
       pcie.writeRsp              <<  crossbar.writeRsp
@@ -460,22 +477,30 @@ class Finka(val config: FinkaConfig) extends Component{
 
   // packet generator
   val packet = new ClockingArea(packetClockDomain) {
-    val packetAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
+    val packetTxAxi4Bus = Axi4(busconfig)
+    val packetRxAxi4Bus = Axi4(busconfig)
 
-    val packetWriter = CorundumFrameWriterAxi4(corundumDataWidth, Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
+    val packetWriter = CorundumFrameWriterAxi4(corundumDataWidth, busconfig)
+    val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
 
     // connect to bus
-    packetWriter.io.ctrlbus << packetAxi4Bus
+    packetWriter.io.ctrlbus << packetTxAxi4Bus
+    packetReader.io.ctrlbus << packetRxAxi4Bus
   }
-  io.master0 << packet.packetWriter.io.output
+  io.frametx << packet.packetWriter.io.output
+  io.framerx >> packet.packetReader.io.input
 
-  // bring axi.packetAxiSharedBus into packet clock domain
-  // and from Shared to Full bus
-  val axi2packetCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
-  axi2packetCDC.io.input << axi.packetAxiSharedBus
-  packet.packetAxi4Bus << axi2packetCDC.io.output.toAxi4()
+  // bring axi.packetTxAxiSharedBus into packet clock domain
+  // and from Shared to Full bus because BusControllerFactory does not support AxiShared?
+  val axi2packetTxCDC = Axi4SharedCC(busconfig, axiClockDomain, packetClockDomain, 2, 2, 2, 2)
+  axi2packetTxCDC.io.input << axi.packetTxAxiSharedBus
+  packet.packetTxAxi4Bus << axi2packetTxCDC.io.output.toAxi4()
 
-  val axi2prefixCDC = Axi4SharedCC(Axi4Config(32, 32, 2, useQos = false, useRegion = false), axiClockDomain, packetClockDomain, 2, 2, 2, 2)
+  val axi2packetRxCDC = Axi4SharedCC(busconfig, axiClockDomain, packetClockDomain, 2, 2, 2, 2)
+  axi2packetRxCDC.io.input << axi.packetRxAxiSharedBus
+  packet.packetRxAxi4Bus << axi2packetRxCDC.io.output.toAxi4()
+
+  val axi2prefixCDC = Axi4SharedCC(busconfig, axiClockDomain, packetClockDomain, 2, 2, 2, 2)
   axi2prefixCDC.io.input << axi.prefixAxiSharedBus
   prefix.prefixAxi4Bus << axi2prefixCDC.io.output.toAxi4()
 
@@ -491,29 +516,28 @@ class Finka(val config: FinkaConfig) extends Component{
 }
 
 // https://gitter.im/SpinalHDL/SpinalHDL?at=5c2297c28d31aa78b1f8c969
+// but now in lib
 object XilinxPatch {
   def apply[T <: Component](c : T) : T = {
-    //Get the io bundle via java reflection
-    val m = c.getClass.getMethod("io")
-    val io = m.invoke(c).asInstanceOf[Bundle]
-
     //Patch things
-    io.elements.map(_._2).foreach{
+    c.getGroupedIO(true).foreach{
       //case axi : AxiLite4 => AxiLite4SpecRenamer(axi)
       case axi : Axi4 => Axi4SpecRenamer(axi)
+      //case axi : CorundumFrame => CorundumAxi4SpecRenamer(axi)
       case _ =>
     }
-
     //Builder pattern return the input argument
-    c 
+    c
   }
 }
+
 
 object Finka{
   def main(args: Array[String]) {
     val config = SpinalConfig()
     val verilog = config.generateVerilog({
       val toplevel = new Finka(FinkaConfig.default)
+      // return this
       XilinxPatch(toplevel)
     })
     //verilog.printPruned()
@@ -526,6 +550,7 @@ object FinkaWithMemoryInit{
     val verilog = config.generateVerilog({
       val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex", onChipRamSize = 64 kB)
       val toplevel = new Finka(socConfig)
+      // return this
       XilinxPatch(toplevel)
     })
     //verilog.printPruned()
@@ -537,30 +562,42 @@ object FinkaSim {
   def main(args: Array[String]): Unit = {
     val simSlowDown = false
     val socConfig = FinkaConfig.default.copy(
+      corundumDataWidth = 128,
       onChipRamSize = 64 kB,
       onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
     )
 
-    val simConfig = SimConfig.allOptimisation
-    //.withFstWave
+    val simConfig = SimConfig
+    .allOptimisation
+    .withFstWave
+
     simConfig.compile{
       val dut = new Finka(socConfig)
 
       // expose internal signals
+      dut.resetCtrl.systemReset.simPublic()
+      dut.resetCtrl.axiReset.simPublic()
+      dut.resetCtrl.packetReset.simPublic()
 
       /* return dut */
       dut
     }
-    .doSimUntilVoid{dut =>
-      // SimConfig.allOptimisation.withWave.compile
+    //.doSimUntilVoid{dut =>
+    //.doSim("test", 0/*fixed seed, to replicate*/){dut =>
+    .doSim{dut =>
       val mainClkPeriod = (1e12/dut.config.axiFrequency.toDouble).toLong
       val packetClkPeriod = (1e12/322e6).toLong
       val jtagClkPeriod = mainClkPeriod * 4/* this must be 4 (maybe more, not less) */
       val uartBaudRate = 115200
       val uartBaudPeriod = (1e12/uartBaudRate).toLong
 
+      dut.io.framerx.valid #= false
+
       val axiClockDomain = ClockDomain(dut.io.axiClk, dut.io.asyncReset)
       axiClockDomain.forkStimulus(mainClkPeriod)
+
+      // stop after 1M clocks
+      SimTimeout(100000 * mainClkPeriod)
 
       val packetClockDomain = ClockDomain(dut.io.packetClk)
       packetClockDomain.forkStimulus(packetClkPeriod)
@@ -582,13 +619,41 @@ object FinkaSim {
 
       dut.io.coreInterrupt #= false
 
-      dut.io.master0.ready #= true
+      dut.io.frametx.ready #= true
 
       var commits_seen = 0
       // run 0.1 second after done
       var cycles_post = 100000
 
-      packetClockDomain.waitSampling(1)
+      dut.packetClockDomain.waitSampling(1)
+      dut.axiClockDomain.waitSampling(1)
+      dut.packetClockDomain.waitSamplingWhere(dut.resetCtrl.packetReset.toBoolean == true)
+      dut.packetClockDomain.waitSamplingWhere(dut.resetCtrl.packetReset.toBoolean == false)
+
+      // push one word in stream
+      dut.io.framerx.payload.tdata.assignBigInt(0x0011223344556677L)
+      dut.io.framerx.payload.tkeep.assignBigInt(0x00FF)
+      dut.io.framerx.payload.tuser.assignBigInt(0)
+      dut.io.framerx.payload.last #= false
+      dut.io.framerx.valid #= true
+      dut.packetClockDomain.waitSamplingWhere(dut.io.framerx.ready.toBoolean)
+      dut.io.framerx.payload.last #= false
+      dut.io.framerx.valid #= true
+      dut.packetClockDomain.waitSamplingWhere(dut.io.framerx.ready.toBoolean)
+      dut.io.framerx.payload.last #= true
+      dut.io.framerx.valid #= true
+      dut.packetClockDomain.waitSamplingWhere(dut.io.framerx.ready.toBoolean)
+      dut.io.framerx.valid #= false
+
+      // push one word in stream
+      dut.io.framerx.payload.tdata.assignBigInt(0x0011223344556677L)
+      dut.io.framerx.payload.tkeep.assignBigInt(0x00FF)
+      dut.io.framerx.payload.tuser.assignBigInt(0)
+      dut.io.framerx.payload.last #= true
+      dut.io.framerx.valid #= true
+      dut.packetClockDomain.waitSamplingWhere(dut.io.framerx.ready.toBoolean)
+      dut.io.framerx.valid #= false
+
 
       while (true) {
         //if (dut.packet.packetWriter.bridge.commit2.toBoolean) {
@@ -613,15 +678,15 @@ object FinkaSim {
           printf("REG6 : %X\n", dut.io.update6.toLong)
         }
 
-        if (dut.io.master0.valid.toBoolean) {
-          printf("*VALID == %X\n", dut.io.master0.valid.toBoolean.toInt)
-          printf("*TLAST == %X\n", dut.io.master0.last.toBoolean.toInt)
+        if (dut.io.frametx.valid.toBoolean) {
+          printf("*VALID == %X\n", dut.io.frametx.valid.toBoolean.toInt)
+          printf("*TLAST == %X\n", dut.io.frametx.last.toBoolean.toInt)
           // 4 bits per printf hex nibble
           val dw = dut.config.corundumDataWidth / 4
           // one keep bit per byte, 4 bits per printf hex nibble
           val kw = dut.config.corundumDataWidth / 8 / 4
-          printf(s"*TDATA == 0x%0${dw}X\n", dut.io.master0.payload.tdata.toBigInt)
-          printf(s"*TKEEP == 0x%0${kw}X\n", dut.io.master0.payload.tkeep.toBigInt)
+          printf(s"*TDATA == 0x%0${dw}X\n", dut.io.frametx.payload.tdata.toBigInt)
+          printf(s"*TKEEP == 0x%0${kw}X\n", dut.io.frametx.payload.tkeep.toBigInt)
         }
 
         packetClockDomain.waitRisingEdge()
