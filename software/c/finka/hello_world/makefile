@@ -141,7 +141,7 @@ clean-all : clean
 debug: $(OBJDIR)/$(PROJ_NAME).elf
 	$(RISCV_GDB) \
 	-ex "set remotetimeout 30" \
-	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
+	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
 	-ex "set arch riscv:rv32" \
 	-ex "monitor reset halt" \
 	-ex "set pagination off" \
@@ -207,4 +207,4 @@ attach: $(OBJDIR)/$(PROJ_NAME).elf
 	$(OBJDIR)/$(PROJ_NAME).elf
 
 openocd:
-	$(OPENOCD) -c "set MURAX_CPU0_YAML ../../../../../cpu0.yaml" -f interface/jtag_tcp.cfg -f ./finka.cfg
+	$(OPENOCD) -c "set MURAX_CPU0_YAML ../../../../cpu0.yaml" -f interface/jtag_tcp.cfg -f ./finka.cfg
