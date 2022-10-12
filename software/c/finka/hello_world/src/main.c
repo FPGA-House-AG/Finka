@@ -36,9 +36,10 @@ Uart_Config uart_cfg = {
   .clockDivider = 250000000/8/115200-1
 };
 
+/* send packet to the downstream transmit FIFO */
 void packet_send(uint32_t *p, int len)
 {
-	if (len == 0) return;
+	if (len == 0) return 0;
 
 	uint32_t corundumDataWidth = *((volatile uint32_t *)AXI_M1 + 0x1020/4);
 
@@ -72,6 +73,74 @@ void packet_send(uint32_t *p, int len)
 	}
 }
 
+void packet_available()
+{
+	return *((volatile uint32_t *)AXI_M1 + 0x2040/4);
+}
+
+/* receive packets from the downstream receive FIFO */
+/* downstream means PHY facing */
+int packet_recv(uint32_t *p, int len)
+{
+	if (len == 0) return 0;
+
+	uint32_t corundumDataWidth = *((volatile uint32_t *)AXI_M1 + 0x2020/4);
+
+	int received = 0;
+	int word_num = 0;
+	int done = 0;
+	int avail = 0;
+	int overflow = 0;
+	int packet_len = 0;
+
+	// 31: valid
+	// 30: last
+	// 15-0: empty, number of empty bytes in current word
+	uint32_t valid_last_empty = 0;
+
+	int last = 0;
+	while (!last) {
+		// poll until stream words become available in the receive FIFO
+		while (avail == 0) {
+			avail = *((volatile uint32_t *)AXI_M1 + 0x2040/4);
+		}
+
+		int valid = 0;
+		// wait until the stream has a valid word available
+		// { avail > 0 }, so we can assert that valid must be true
+		while (!valid) {
+			valid_last_empty = *((volatile uint32_t *)AXI_M1 + 0x2080/4);
+			valid = (valid_last_empty & (1 << 31)) >> 31;
+		}
+		// { valid word available, check last flag }
+		last = (valid_last_empty & (1 << 30)) >> 30;
+
+		// { valid word available }, determine number of empty bytes in stream word
+		int empty_bytes = valid_last_empty & 0xFFFFu;
+		// assume all bytes are available
+		int avail_bytes = corundumDataWidth / 8;
+		if (last) {
+			avail_bytes -= empty_bytes;
+		}
+		int avail_words = (avail_bytes + 3) / 4;
+		//assert(avail_words <= (corundumDataWidth / 32));
+
+		int addr = 0;
+		// iterate over all non-empty 32-bit words in the current stream word
+		while (addr < avail_words) {
+			if (word_num < (len / 4)) {
+				p[word_num] = *((volatile uint32_t *)AXI_M1 + 0x2100/4 + addr);
+			} else {
+				overflow = 1;
+			}
+			word_num += 1;
+			addr += 1;
+		}
+		packet_len += avail_bytes;
+	}
+	return overflow? 0: packet_len;
+}
+
 void main() {
 	uart_applyConfig(UART, &uart_cfg);
     //println("Hello world! I am Finka.");
@@ -79,43 +148,27 @@ void main() {
     uint32_t identifier = *((volatile uint32_t *)AXI_M1 + 0x1000/4);
     uint32_t version = *((volatile uint32_t *)AXI_M1 + 0x1000/4);
 
-#if 0
-	*((volatile uint32_t *)AXI_M1) = 0xaabbccddU;
-	*((volatile uint8_t *)AXI_M1 + 0) = (uint8_t)0x11U;
-	*((volatile uint8_t *)AXI_M1 + 1) = (uint8_t)0x22U;
-	*((volatile uint8_t *)AXI_M1 + 2) = (uint8_t)0x33U;
-	*((volatile uint8_t *)AXI_M1 + 3) = (uint8_t)0x44U;
-	*((volatile uint32_t *)AXI_M1) = 0xdeadbeefU;
-	*((volatile uint32_t *)AXI_M1 + 1) = 0xbabecafeU;
-#elif 0 // prefix
-	for (int i = 0; i < 7; i++) {
-		print_int(i);
-		*((volatile uint32_t *)AXI_M1 + 0x00/4 + i) = i * 0x11;
-	}
-#endif
-#if 1 // packet generation
-	// note that the packets are always a multiple of 32-bit or 4-bytes
-	// this is a limitation in the packet generator IP. For Wireguard,
-	// this is no limitation
-	// todo read from hardware
-
 	static uint32_t packet[512];
 	uint8_t *ptr = (uint8_t *)packet;
 	for (int i = 0; i < 512 * 4; i++) {
 		ptr[i] = i;
 	}
 
-	uint32_t corundumDataWidth = *((volatile uint32_t *)AXI_M1 + 0x1020/4);
+	while (1) {
+		int packet_len = packet_recv(packet, 512);
+		print("L:");
+		print_int(packet_len);
+		print("\n");
+		if (packet_len > 0) {
+			packet_send(packet, packet_len);
+		}
+	}
 
+#if 0 // packet transmit
 	//int packet_len = (corundumDataWidth/8)*2+1;
 	for (int packet_len = 1; packet_len <= (corundumDataWidth/8)*2+1; packet_len++) {
 	  packet_send(packet, packet_len);
 	}
-	//*((volatile uint32_t *)AXI_M1 + 0x18/4) = 0xbabecafeU;
-	//*((volatile uint32_t *)AXI_M1 + 0x18/4) = 0xbabecafeU;
-	//*((volatile uint32_t *)AXI_M1 + 0x18/4) = 0xbabecafeU;
-	//*((volatile uint32_t *)AXI_M1 + 0x18/4) = 0xbabecafeU;
-
 #endif
     GPIO_A->OUTPUT_ENABLE = 0x0000000F;
 	GPIO_A->OUTPUT = 0x00000001;
