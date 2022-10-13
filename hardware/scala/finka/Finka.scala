@@ -1,13 +1,13 @@
 // Based on Briey, but with VGA and SDRAM controller removed
 
 // Goal 1 is to expose a full (non-shared) AXI4 master on the top-level.
-// see "extAxiSharedBus" for the bus between crossbar and this master
+// see "extAxi4SharedBus" for the bus between crossbar and this master
 // see "extAxi4Master" for the master interface for toplevel I/O
 // This works, tested in hardware.
 
 // Goal 2 is to expose a full (non-shared) AXI4 slave on the top-level.
-// see "pcieAxiSharedBus" for the bus between crossbar and this slave
-// pcieAxiSharedBus is bridged from pcieAxi4Bus
+// see "pcieAxi4SharedBus" for the bus between crossbar and this slave
+// pcieAxi4SharedBus is bridged from pcieAxi4Bus
 // see "pcieAxi4Slave" for the slave interface for toplevel I/O
 // This compiles.
 
@@ -307,12 +307,12 @@ class Finka(val config: FinkaConfig) extends Component{
       println("[WARNING] Axi4SharedOnChipRam is NOT initialized.")
     }
 
-    val prefixAxiSharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
-    val packetTxAxiSharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
-    val packetRxAxiSharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val prefixAxi4SharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val packetTxAxi4SharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val packetRxAxi4SharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
-    val pcieAxiSharedBus = pcieAxi4Bus.toShared()
+    val pcieAxi4SharedBus = pcieAxi4Bus.toShared()
 
     //, useId = false, useRegion = false, 
     // useBurst = false, useLock = false, useCache = false, useSize = false, useQos = false,
@@ -362,9 +362,9 @@ class Finka(val config: FinkaConfig) extends Component{
 
     axiCrossbar.addSlaves(
       ram.io.axi          -> (0x00800000L, onChipRamSize),
-      prefixAxiSharedBus  -> (0x00C00000L, 4 kB),
-      packetTxAxiSharedBus-> (0x00C01000L, 4 kB),
-      packetRxAxiSharedBus-> (0x00C02000L, 4 kB),
+      prefixAxi4SharedBus  -> (0x00C00000L, 4 kB),
+      packetTxAxi4SharedBus-> (0x00C01000L, 4 kB),
+      packetRxAxi4SharedBus-> (0x00C02000L, 4 kB),
       apbBridge.io.axi    -> (0x00F00000L, 1 MB)
     )
 
@@ -374,11 +374,11 @@ class Finka(val config: FinkaConfig) extends Component{
       // CPU instruction bus (read-only master) can only access RAM slave
       core.iBus        -> List(ram.io.axi),
       // CPU data bus can access all slaves
-      core.dBus        -> List(ram.io.axi, apbBridge.io.axi, prefixAxiSharedBus, packetTxAxiSharedBus, packetRxAxiSharedBus),
-      pcieAxiSharedBus -> List(ram.io.axi, apbBridge.io.axi, prefixAxiSharedBus, packetTxAxiSharedBus, packetRxAxiSharedBus)
+      core.dBus        -> List(ram.io.axi, apbBridge.io.axi, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus),
+      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus)
     )
 
-    /* AXI Peripheral Bus slave */
+    /* AXI Peripheral Bus (APB) slave */
     axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar, bridge) => {
       crossbar.sharedCmd.halfPipe() >> bridge.sharedCmd
       crossbar.writeData.halfPipe() >> bridge.writeData
@@ -387,7 +387,7 @@ class Finka(val config: FinkaConfig) extends Component{
     })
 
     /* prefix update slave */
-    axiCrossbar.addPipelining(prefixAxiSharedBus)((crossbar, ctrl) => {
+    axiCrossbar.addPipelining(prefixAxi4SharedBus)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
@@ -395,7 +395,7 @@ class Finka(val config: FinkaConfig) extends Component{
     })
 
     /* packet writer slave */
-    axiCrossbar.addPipelining(packetTxAxiSharedBus)((crossbar, ctrl) => {
+    axiCrossbar.addPipelining(packetTxAxi4SharedBus)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
@@ -403,7 +403,7 @@ class Finka(val config: FinkaConfig) extends Component{
     })
 
     /* packet reader slave */
-    axiCrossbar.addPipelining(packetRxAxiSharedBus)((crossbar, ctrl) => {
+    axiCrossbar.addPipelining(packetRxAxi4SharedBus)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
@@ -427,7 +427,7 @@ class Finka(val config: FinkaConfig) extends Component{
     })
 
     // PCIe bus master
-    axiCrossbar.addPipelining(pcieAxiSharedBus)((pcie, crossbar) => {
+    axiCrossbar.addPipelining(pcieAxi4SharedBus)((pcie, crossbar) => {
       pcie.sharedCmd             >>  crossbar.sharedCmd
       pcie.writeData             >>  crossbar.writeData
       pcie.writeRsp              <<  crossbar.writeRsp
@@ -477,32 +477,34 @@ class Finka(val config: FinkaConfig) extends Component{
 
   // packet generator
   val packet = new ClockingArea(packetClockDomain) {
-    val packetTxAxi4Bus = Axi4(busconfig)
-    val packetRxAxi4Bus = Axi4(busconfig)
+    val packetTxAxi4SharedBus = Axi4Shared(busconfig)
+    val packetRxAxi4SharedBus = Axi4Shared(busconfig)
 
     val packetWriter = CorundumFrameWriterAxi4(corundumDataWidth, busconfig)
     val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
 
     // connect to bus
-    packetWriter.io.ctrlbus << packetTxAxi4Bus
-    packetReader.io.ctrlbus << packetRxAxi4Bus
+    packetWriter.io.ctrlbus << packetTxAxi4Bus.toAxi4()
+    packetReader.io.ctrlbus << packetRxAxi4Bus.toAxi4()
   }
   io.frametx << packet.packetWriter.io.output
   io.framerx >> packet.packetReader.io.input
 
-  // bring axi.packetTxAxiSharedBus into packet clock domain
-  // and from Shared to Full bus because BusControllerFactory does not support AxiShared?
+  // bring axi.packetTxAxi4SharedBus into packet clock domain
+  // and from Shared to Full bus because BusControllerFactory does not support Axi4Shared?
   val axi2packetTxCDC = Axi4SharedCC(busconfig, axiClockDomain, packetClockDomain, 2, 2, 2, 2)
-  axi2packetTxCDC.io.input << axi.packetTxAxiSharedBus
-  packet.packetTxAxi4Bus << axi2packetTxCDC.io.output.toAxi4()
+  axi2packetTxCDC.io.input << axi.packetTxAxi4SharedBus
+  packet.packetTxAxi4SharedBus << axi2packetTxCDC.io.output//.toAxi4()
 
   val axi2packetRxCDC = Axi4SharedCC(busconfig, axiClockDomain, packetClockDomain, 2, 2, 2, 2)
-  axi2packetRxCDC.io.input << axi.packetRxAxiSharedBus
-  packet.packetRxAxi4Bus << axi2packetRxCDC.io.output.toAxi4()
+  axi2packetRxCDC.io.input << axi.packetRxAxi4SharedBus
+  packet.packetRxAxi4SharedBus << axi2packetRxCDC.io.output//.toAxi4()
 
   val axi2prefixCDC = Axi4SharedCC(busconfig, axiClockDomain, packetClockDomain, 2, 2, 2, 2)
-  axi2prefixCDC.io.input << axi.prefixAxiSharedBus
+  axi2prefixCDC.io.input << axi.prefixAxi4SharedBus
   prefix.prefixAxi4Bus << axi2prefixCDC.io.output.toAxi4()
+  // if we keep adding CDCs here, maybe one CDC to a 2nd crossbar inside
+  // the packet clock domain?
 
   io.gpioA          <> axi.gpioACtrl.io.gpio
   io.timerExternal  <> axi.timerCtrl.io.external
@@ -569,7 +571,7 @@ object FinkaSim {
 
     val simConfig = SimConfig
     .allOptimisation
-    .withFstWave
+    //.withFstWave
 
     simConfig.compile{
       val dut = new Finka(socConfig)
