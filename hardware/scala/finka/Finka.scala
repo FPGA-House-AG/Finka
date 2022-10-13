@@ -514,7 +514,22 @@ class Finka(val config: FinkaConfig) extends Component{
   io.commit := prefix.commit
   io.update := prefix.update
 
+  //// Remove io_ prefix
   //noIoPrefix()
+
+  //// Rename SpinalHDL library defaults to AXI naming convention
+  //private def renameIO(): Unit = {
+  //  io.flatten.foreach(bt => {
+  //    if(bt.getName().contains("_payload")) bt.setName(bt.getName().replace("_payload", ""))
+  //    if(bt.getName().contains("_fragment")) bt.setName(bt.getName().replace("_fragment", ""))
+  //    if(bt.getName().contains("_valid")) bt.setName(bt.getName().replace("_valid", "_tvalid"))
+  //    if(bt.getName().contains("_ready")) bt.setName(bt.getName().replace("_ready", "_tready"))
+  //    if(bt.getName().contains("_last")) bt.setName(bt.getName().replace("_last", "_tlast"))
+  //  })
+  //}
+
+  //// Execute the function renameIO after the creation of the component
+  //addPrePopTask(() => renameIO())
 }
 
 // https://gitter.im/SpinalHDL/SpinalHDL?at=5c2297c28d31aa78b1f8c969
