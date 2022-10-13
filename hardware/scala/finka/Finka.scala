@@ -484,8 +484,8 @@ class Finka(val config: FinkaConfig) extends Component{
     val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
 
     // connect to bus
-    packetWriter.io.ctrlbus << packetTxAxi4Bus.toAxi4()
-    packetReader.io.ctrlbus << packetRxAxi4Bus.toAxi4()
+    packetWriter.io.ctrlbus << packetTxAxi4SharedBus.toAxi4()
+    packetReader.io.ctrlbus << packetRxAxi4SharedBus.toAxi4()
   }
   io.frametx << packet.packetWriter.io.output
   io.framerx >> packet.packetReader.io.input
