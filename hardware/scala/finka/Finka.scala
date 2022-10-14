@@ -614,7 +614,7 @@ object FinkaSim {
       axiClockDomain.forkStimulus(mainClkPeriod)
 
       // stop after 1M clocks
-      SimTimeout(100000 * mainClkPeriod)
+      //SimTimeout(100000 * mainClkPeriod)
 
       val packetClockDomain = ClockDomain(dut.io.packetClk)
       packetClockDomain.forkStimulus(packetClkPeriod)
