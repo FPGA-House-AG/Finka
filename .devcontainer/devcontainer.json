@@ -1,0 +1,27 @@
+{
+    "name": "RISC-V Docker",
+    "image": "riscv",
+    //"context": "..",
+    //"remoteUser": "1000:1000",
+    "runArgs": [
+      //"--env-file", "${localWorkspaceFolder}/.devcontainer/.env",
+      "-e", "DISPLAY=:0",
+      "-e", "XAUTHORITY=/tmp/.Xauthority",
+      "--name", "vscode-docker-vexriscv",
+      "-v", "/tmp/vscode-docker-x11-remote/socket:/tmp/.X11-unix",
+      "-v", "/tmp/vscode-docker-x11-remote/Xauthority:/tmp/.Xauthority",
+      // required for Xauthority
+      "--hostname=riscv-container",
+    ],
+    "initializeCommand": ".devcontainer/docker-init.sh",
+    //"postCreateCommand": "vivado -version",
+
+    // Add the IDs of extensions you want installed when the container is created.
+    "extensions": [
+      "ms-vscode.cpptools",
+      "webfreak.debug"
+      //"ms-vscode.cpptools-extension-pack",
+    ],
+    "workspaceMount": "source=${localWorkspaceFolder}/..,target=/workspace,type=bind",
+    "workspaceFolder": "/workspace"
+}

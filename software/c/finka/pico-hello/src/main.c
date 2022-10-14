@@ -18,5 +18,8 @@ Uart_Config uart_cfg = {
 
 void main() {
   uart_applyConfig(UART, &uart_cfg);
-  print("hello world from pico-hello!\n");
+  int count = 0;
+  while (count < 200) {
+    print("hello world from pico-hello! %d\n");
+  }
 }

@@ -1,9 +1,18 @@
 # This is a simple hello world using picolibc
 
 PROJ_NAME=pico-hello
-DEBUG=no
+DEBUG=yes
 BENCH=no
 MULDIV=no
+
+# "I"   Base Integer Instruction Set
+# "M" Standard Extension for Integer Multiplication and Divison
+# "A" Standard Extension for Atomic Instructions
+# "F" Standard Extension for Single-Precision Floating-Point
+# "D" Standard Extension for Double-Precision Floating-Point
+# "Q" Standard Extension for Quard-Precision Floating-point
+# "C" Standard Extension for Compressed Instruction
+# "G" combination of I, M, A, F and D
 
 SRCS = 	$(wildcard src/*.c) \
 		$(wildcard src/*.cpp)  \
@@ -153,7 +162,7 @@ debug: $(OBJDIR)/$(PROJ_NAME).elf
 batch_debug: $(OBJDIR)/$(PROJ_NAME).elf
 	$(RISCV_GDB) --batch \
 	-ex "set remotetimeout 30" \
-	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
+	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
 	-ex "set arch riscv:rv32" \
 	-ex "monitor reset halt" \
 	-ex "set pagination off" \
@@ -163,9 +172,9 @@ batch_debug: $(OBJDIR)/$(PROJ_NAME).elf
 	$(OBJDIR)/$(PROJ_NAME).elf
 
 upload: $(OBJDIR)/$(PROJ_NAME).elf
-	$(RISCV_GDB) --batch \
+	$(RISCV_GDB) --batch -q \
 	-ex "set remotetimeout 30" \
-	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
+	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
 	-ex "set arch riscv:rv32" \
 	-ex "monitor reset halt" \
 	-ex "set pagination off" \
@@ -178,7 +187,7 @@ upload: $(OBJDIR)/$(PROJ_NAME).elf
 attach: $(OBJDIR)/$(PROJ_NAME).elf
 	$(RISCV_GDB) \
 	-ex "set remotetimeout 30" \
-	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
+	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
 	-ex "set arch riscv:rv32" \
 	-ex "monitor reset halt" \
 	$(OBJDIR)/$(PROJ_NAME).elf
