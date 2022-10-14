@@ -1,3 +1,6 @@
+# This is a minimal hello world using -nostdlib and -ffreestanding
+# showing custom C run time, linker script etc.
+
 PROJ_NAME=hello_world
 DEBUG=no
 BENCH=no
@@ -77,7 +80,7 @@ RISCV_OBJDUMP = $(RISCV_PATH)/bin/$(RISCV_NAME)-objdump
 RISCV_CC=$(RISCV_PATH)/bin/$(RISCV_NAME)-gcc
 RISCV_GDB=$(RISCV_PATH)/bin/$(RISCV_NAME)-gdb
 
-CFLAGS +=  -MD -fstrict-volatile-bitfields -fno-strict-aliasing
+CFLAGS +=  -MD -fstrict-volatile-bitfields -fno-strict-aliasing -save-temps
 LDFLAGS +=  -nostdlib -lgcc -mcmodel=medany -nostartfiles -ffreestanding -Wl,-Bstatic,-T,$(LDSCRIPT),-Map,$(OBJDIR)/$(PROJ_NAME).map,--print-memory-usage
 #LDFLAGS += -lgcc -lc -lg -nostdlib  -lgcc  -msave-restore    --strip-debug,
 

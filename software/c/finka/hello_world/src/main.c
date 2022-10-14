@@ -73,7 +73,7 @@ void packet_send(uint32_t *p, int len)
 	}
 }
 
-void packet_available()
+int packet_rx_available()
 {
 	return *((volatile uint32_t *)AXI_M1 + 0x2040/4);
 }
