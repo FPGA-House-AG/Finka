@@ -310,6 +310,8 @@ class Finka(val config: FinkaConfig) extends Component{
     val prefixAxi4SharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
     val packetTxAxi4SharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
     val packetRxAxi4SharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val lookupAxi4SharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
     val pcieAxi4SharedBus = pcieAxi4Bus.toShared()
@@ -361,21 +363,22 @@ class Finka(val config: FinkaConfig) extends Component{
     val axiCrossbar = Axi4CrossbarFactory()
 
     axiCrossbar.addSlaves(
-      ram.io.axi          -> (0x00800000L, onChipRamSize),
-      prefixAxi4SharedBus  -> (0x00C00000L, 4 kB),
-      packetTxAxi4SharedBus-> (0x00C01000L, 4 kB),
-      packetRxAxi4SharedBus-> (0x00C02000L, 4 kB),
-      apbBridge.io.axi    -> (0x00F00000L, 1 MB)
+      ram.io.axi            -> (0x00800000L, onChipRamSize),
+      prefixAxi4SharedBus   -> (0x00C00000L, 4 kB),
+      packetTxAxi4SharedBus -> (0x00C01000L, 4 kB),
+      packetRxAxi4SharedBus -> (0x00C02000L, 4 kB),
+      lookupAxi4SharedBus   -> (0x00C03000L, 4 kB),
+      apbBridge.io.axi      -> (0x00F00000L, 1 MB)
     )
 
     // sparse AXI4Shared crossbar
     // left side master, then for each master a List of accessible slaves on the right side
     axiCrossbar.addConnections(
       // CPU instruction bus (read-only master) can only access RAM slave
-      core.iBus        -> List(ram.io.axi),
+      core.iBus         -> List(ram.io.axi),
       // CPU data bus can access all slaves
-      core.dBus        -> List(ram.io.axi, apbBridge.io.axi, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus),
-      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus)
+      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus, lookupAxi4SharedBus),
+      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus, lookupAxi4SharedBus)
     )
 
     /* AXI Peripheral Bus (APB) slave */
@@ -388,7 +391,7 @@ class Finka(val config: FinkaConfig) extends Component{
 
     /* prefix update slave */
     axiCrossbar.addPipelining(prefixAxi4SharedBus)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
       crossbar.readRsp               <<  ctrl.readRsp
@@ -396,7 +399,7 @@ class Finka(val config: FinkaConfig) extends Component{
 
     /* packet writer slave */
     axiCrossbar.addPipelining(packetTxAxi4SharedBus)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
       crossbar.readRsp               <<  ctrl.readRsp
@@ -404,7 +407,15 @@ class Finka(val config: FinkaConfig) extends Component{
 
     /* packet reader slave */
     axiCrossbar.addPipelining(packetRxAxi4SharedBus)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe() >> ctrl.sharedCmd
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <<  ctrl.writeRsp
+      crossbar.readRsp               <<  ctrl.readRsp
+    })
+
+    /* lookup table slave */
+    axiCrossbar.addPipelining(lookupAxi4SharedBus)((crossbar, ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
       crossbar.readRsp               <<  ctrl.readRsp
@@ -444,6 +455,13 @@ class Finka(val config: FinkaConfig) extends Component{
         timerCtrl.io.apb -> (0x20000, 4 kB)
       )
     )
+
+    val lookupTable = LookupMemAxi4(33, 128, busconfig)
+    lookupTable.io.ctrlbus << lookupAxi4SharedBus.toAxi4()
+
+
+    //val x =  Axi4SharedToBram(addressAxiWidth = 8, addressBRAMWidth = 8, dataWidth = 32, idWidth = 0)
+
   }
 
   val prefix = new ClockingArea(packetClockDomain) {
@@ -503,6 +521,7 @@ class Finka(val config: FinkaConfig) extends Component{
   val axi2prefixCDC = Axi4SharedCC(busconfig, axiClockDomain, packetClockDomain, 2, 2, 2, 2)
   axi2prefixCDC.io.input << axi.prefixAxi4SharedBus
   prefix.prefixAxi4Bus << axi2prefixCDC.io.output.toAxi4()
+
   // if we keep adding CDCs here, maybe one CDC to a 2nd crossbar inside
   // the packet clock domain?
 
@@ -540,7 +559,7 @@ object XilinxPatch {
     c.getGroupedIO(true).foreach{
       //case axi : AxiLite4 => AxiLite4SpecRenamer(axi)
       case axi : Axi4 => Axi4SpecRenamer(axi)
-      //case axi : CorundumFrame => CorundumAxi4SpecRenamer(axi)
+      //case axi : Fragment(CorundumFrame) => CorundumAxi4SpecRenamer(axi)
       case _ =>
     }
     //Builder pattern return the input argument
