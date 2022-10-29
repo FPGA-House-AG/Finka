@@ -45,7 +45,7 @@ sim: #use_dev_spinal
 # load and run via GDB in batch mode
 debug:
 	set -e
-	tail -F sbt.log | sed '/WAITING FOR TCP JTAG CONNECTION/ q' > /dev/null
+	tail -n +0 -F sbt.log | sed '/WAITING FOR TCP JTAG CONNECTION/ q' > /dev/null
 	make -C software/c/finka/hello_world   debug    DEBUG=yes
 
 # run in terminal #3
