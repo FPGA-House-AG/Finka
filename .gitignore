@@ -1,8 +1,8 @@
 project/target
 simWorkspace
-software/c/finka/hello_world/build
 *.log
 Finka.v*
 cpu0.yaml
 target
 .bsp/sbt.json
+software/c/finka/*/build

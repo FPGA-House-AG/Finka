@@ -1,5 +1,6 @@
 {
+    //"docker.host":"ssh://rock.blackwire.online",
     "files.watcherExclude": {
         "**/target": true
-    }
+    },
 }

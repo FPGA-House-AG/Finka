@@ -36,6 +36,7 @@ lazy val spinalHdlIdslPlugin = ProjectRef(file(spinalDir), "idslplugin")
 lazy val spinalHdlSim = ProjectRef(file(spinalDir), "sim")
 
 lazy val vexRiscv = RootProject(file("../VexRiscv.pinned")) // bc3c59cd20b702ef3247a56cb4868be4f45b26ad
+// e1620c68b2bfcff7ad1bc8ce665cf4ce29452141
 lazy val spinalCorundum = RootProject(file("../SpinalCorundum")) // fcecdbb6456ee29f4d64e43d2682555d1d68ddef
 
 fork := true

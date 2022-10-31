@@ -60,7 +60,7 @@ RISCV_OBJDUMP = $(CROSS_COMPILE)objdump
 RISCV_CC=$(CROSS_COMPILE)gcc
 RISCV_GDB=$(CROSS_COMPILE)gdb
 
-CFLAGS += -MD -fstrict-volatile-bitfields -fno-strict-aliasing -specs=picolibc.specs -save-temps=obj
+CFLAGS += -MD -fstrict-volatile-bitfields -fno-strict-aliasing -specs=picolibc.specs -save-temps=obj -Wunused -Wuninitialized
 LDFLAGS += -lgcc -mcmodel=medany -T$(LDSCRIPT) -Wl,-Bstatic,-Map,$(OBJDIR)/$(PROJ_NAME).map,--print-memory-usage
 #  -nostartfiles -nostdlib -ffreestanding 
 #LDFLAGS += -lgcc -lc -lg -nostdlib  -lgcc  -msave-restore    --strip-debug,
@@ -154,7 +154,7 @@ debug: $(OBJDIR)/$(PROJ_NAME).elf
 #	-ex "stepi" \
 #	-ex "stepi" \
 #	-ex "stepi" \
-	-ex "echo >>> GDB will break at main. Type 'next' <enter> to proceed to the next C line. <<<\\n" \
+#	-ex "echo >>> GDB will break at main. Type 'next' <enter> to proceed to the next C line. <<<\\n" \
 
 #	-ex "set remote hardware-breakpoint-limit 2" \
 
