@@ -148,6 +148,16 @@ void main() {
     uint32_t identifier = *((volatile uint32_t *)AXI_M1 + 0x1000/4);
     uint32_t version = *((volatile uint32_t *)AXI_M1 + 0x1000/4);
 
+    *((volatile uint32_t *)AXI_M1 + 0x3000/4) = 0xDEADBEEFu;
+    *((volatile uint32_t *)AXI_M1 + 0x3004/4) = 0xCAFEBABEu;
+    *((volatile uint32_t *)AXI_M1 + 0x3008/4) = 0x44332211u;
+    *((volatile uint32_t *)AXI_M1 + 0x300c/4) = 0x88776655u;
+
+    (void)*((volatile uint32_t *)AXI_M1 + 0x3000/4);
+    (void)*((volatile uint32_t *)AXI_M1 + 0x3004/4);
+    (void)*((volatile uint32_t *)AXI_M1 + 0x3008/4);
+    (void)*((volatile uint32_t *)AXI_M1 + 0x300c/4);
+
 	static uint32_t packet[512];
 	uint8_t *ptr = (uint8_t *)packet;
 	for (int i = 0; i < 512 * 4; i++) {

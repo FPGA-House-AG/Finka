@@ -33,11 +33,11 @@ import spinal.lib.soc.pinsec.{PinsecTimerCtrl, PinsecTimerCtrlExternal}
 import spinal.lib.system.debugger.{JtagAxi4SharedDebugger, JtagBridge, SystemDebugger, SystemDebuggerConfig}
 
 import spinal.lib.bus.misc.SizeMapping
-import spinal.lib.bus.regif.AccessType._
-import spinal.lib.bus.regif._
-import spinal.lib.bus.regif.Document.CHeaderGenerator
-import spinal.lib.bus.regif.Document.HtmlGenerator
-import spinal.lib.bus.regif.Document.JsonGenerator
+//import spinal.lib.bus.regif.AccessType._
+//import spinal.lib.bus.regif._
+//import spinal.lib.bus.regif.Document.CHeaderGenerator
+//import spinal.lib.bus.regif.Document.HtmlGenerator
+//import spinal.lib.bus.regif.Document.JsonGenerator
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
@@ -456,7 +456,7 @@ class Finka(val config: FinkaConfig) extends Component{
       )
     )
 
-    val lookupTable = LookupMemAxi4(33, 128, busconfig)
+    val lookupTable = LookupMemAxi4(63, 128, busconfig)
     lookupTable.io.ctrlbus << lookupAxi4SharedBus.toAxi4()
 
 
@@ -605,7 +605,9 @@ object FinkaSim {
 
     val simConfig = SimConfig
     .allOptimisation
-    //.withFstWave
+    .withFstWave
+    //.withWaveDepth(10) // does not work with Verilator, use SimTimeout()
+    .addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
 
     simConfig.compile{
       val dut = new Finka(socConfig)
@@ -632,8 +634,8 @@ object FinkaSim {
       val axiClockDomain = ClockDomain(dut.io.axiClk, dut.io.asyncReset)
       axiClockDomain.forkStimulus(mainClkPeriod)
 
-      // stop after 1M clocks
-      //SimTimeout(100000 * mainClkPeriod)
+      // stop after 1M clocks to prevent disk wearout
+      SimTimeout(100000 * mainClkPeriod)
 
       val packetClockDomain = ClockDomain(dut.io.packetClk)
       packetClockDomain.forkStimulus(packetClkPeriod)
