@@ -150,13 +150,13 @@ void main() {
 
     *((volatile uint32_t *)AXI_M1 + 0x3000/4) = 0xDEADBEEFu;
     *((volatile uint32_t *)AXI_M1 + 0x3004/4) = 0xCAFEBABEu;
-    *((volatile uint32_t *)AXI_M1 + 0x3008/4) = 0x44332211u;
-    *((volatile uint32_t *)AXI_M1 + 0x300c/4) = 0x88776655u;
+    *((volatile uint32_t *)AXI_M1 + 0x3100/4) = 0x44332211u;
+    *((volatile uint32_t *)AXI_M1 + 0x3104/4) = 0x88776655u;
 
     (void)*((volatile uint32_t *)AXI_M1 + 0x3000/4);
     (void)*((volatile uint32_t *)AXI_M1 + 0x3004/4);
-    (void)*((volatile uint32_t *)AXI_M1 + 0x3008/4);
-    (void)*((volatile uint32_t *)AXI_M1 + 0x300c/4);
+    (void)*((volatile uint32_t *)AXI_M1 + 0x3100/4);
+    (void)*((volatile uint32_t *)AXI_M1 + 0x3104/4);
 
 	static uint32_t packet[512];
 	uint8_t *ptr = (uint8_t *)packet;

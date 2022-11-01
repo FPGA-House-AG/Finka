@@ -95,9 +95,11 @@ case class LookupMem(memDataWidth : Int,
     val bytes_per_memory_word = cpu_words_per_memory_word * bytes_per_cpu_word
     val bytes_to_cpu_word_shift = log2Up(bytes_per_cpu_word)
     val bytes_to_memory_word_shift = log2Up(bytes_per_memory_word)
+    val cpu_word_to_memory_word_shift = bytes_to_memory_word_shift - bytes_to_cpu_word_shift
     printf("cpu_words_per_memory_word    = %d (CPU words reserved per lookup table word)\n", cpu_words_per_memory_word)
     printf("bytes_to_cpu_word_shift      = %d (bits to strip off)\n", bytes_to_cpu_word_shift)
     printf("bytes_to_memory_word_shift   = %d (bits to strip off)\n", bytes_to_memory_word_shift)
+    printf("cpu_word_to_memory_word_shift= %d (bits to strip off)\n", cpu_word_to_memory_word_shift)
 
     printf("memory_words                 = %d\n", wordCount)
 
@@ -116,10 +118,21 @@ case class LookupMem(memDataWidth : Int,
     printf("bytes_to_memory_word_mask      = 0x%08x\n", bytes_to_memory_word_mask)
     printf("cpu_word_to_memory_word_mask   = 0x%08x\n", cpu_word_to_memory_word_mask)
 
+    printf("isFirstWritten = MaskMapping(0x%08x, 0x%08x)\n", 0, bytes_to_memory_word_mask)
 
-    //assert(memory_size <= )
+    def isWritten(): Bool = {
+      val size_mapping = SizeMapping(0, memory_size)
+      val ret = False
+      busCtrl.onWritePrimitive(address = size_mapping, false, ""){ ret := True }
+      ret
+    }
 
-    printf("isLastWritten = MaskMapping(0x%08x, 0x%08x)\n", (bus_words_per_memory_word - 1) * bytes_per_cpu_word, bytes_to_memory_word_mask)
+    def isFirstWritten(): Bool = {
+      val mask_mapping_first = MaskMapping(0, bytes_to_memory_word_mask)
+      val ret = False
+      busCtrl.onWritePrimitive(address = mask_mapping_first, false, ""){ ret := True }
+      ret
+    }
 
     def isLastWritten(): Bool = {
       val mask_mapping_last = MaskMapping((bus_words_per_memory_word - 1) * bytes_per_cpu_word, bytes_to_memory_word_mask)
@@ -128,13 +141,53 @@ case class LookupMem(memDataWidth : Int,
       ret
     }
 
-    printf("isFirstWritten = MaskMapping(0x%08x, 0x%08x)\n", 0, bytes_to_memory_word_mask)
+    val is_written = isWritten()
+    val is_written_first = isFirstWritten()
+    val is_written_last = isLastWritten()
+
+    printf("isLastWritten = MaskMapping(0x%08x, 0x%08x)\n", (bus_words_per_memory_word - 1) * bytes_per_cpu_word, bytes_to_memory_word_mask)
 
 
-    def isFirstWritten(): Bool = {
-      val mask_mapping_first = MaskMapping(0, bytes_to_memory_word_mask)
+
+    // write bus data on 'bus_wr_data' signal
+    val bus_wr_data = Bits(busCtrl.busDataWidth bits)
+    busCtrl.nonStopWrite(bus_wr_data)
+
+    // bus write address, which addresses a memory word in the memory
+    val bus_wr_addr_memory_word = (busCtrl.writeAddress >> bytes_to_memory_word_shift).resize(memAddressWidth)
+    // index of CPU word inside the addressed memory word
+    val wr_cpu_word_of_memory_word = (busCtrl.writeAddress >> bytes_to_cpu_word_shift).resize(cpu_word_to_memory_word_shift) & U(cpu_word_to_memory_word_mask, cpu_word_to_memory_word_shift bits)
+
+    val expected = Reg(UInt(widthOf(busCtrl.writeAddress) bits))
+
+    // accumulated data to be written to memory in one cycle
+    val write_data_width = cpu_words_per_memory_word * busCtrl.busDataWidth
+    val write_data = Reg(Bits(write_data_width bits))
+    
+    // first CPU word of a memory word is written on the bus
+    when (is_written_first) {
+      expected := busCtrl.writeAddress + busCtrl.busDataWidth / 8
+      // write first CPU word in most significant CPU word (shifted down if more CPU words follow), clear other bits
+      write_data := bus_wr_data.resize(write_data_width) |<< ((cpu_words_per_memory_word - 1) * busCtrl.busDataWidth)
+    // expected next CPU word of a memory word is written on the bus
+    }
+    .elsewhen (is_written & (expected === busCtrl.writeAddress)) {
+      expected := busCtrl.writeAddress + busCtrl.busDataWidth / 8
+      // write new CPU word in most significant CPU word, shift down the existing accumulated data
+      write_data := (bus_wr_data.resize(write_data_width) |<< ((cpu_words_per_memory_word - 1) * busCtrl.busDataWidth)) | (write_data |>> busCtrl.busDataWidth)
+    }
+
+    // register write pulse and address, as write_data is registered
+    val is_written_last_d1 = RegNext(is_written_last)
+    // strip of the byte-addressing and CPU word addressing bits, register, as write_data is registered
+    val mem_wr_addr = RegNext((busCtrl.writeAddress >> bytes_to_memory_word_shift).resize(memAddressWidth))
+
+    io.portA.en := True
+
+    def isRead(): Bool = {
+      val size_mapping = SizeMapping(0, memory_size)
       val ret = False
-      busCtrl.onWritePrimitive(address = mask_mapping_first, false, ""){ ret := True }
+      busCtrl.onReadPrimitive(address = size_mapping, false, ""){ ret := True }
       ret
     }
 
@@ -145,58 +198,30 @@ case class LookupMem(memDataWidth : Int,
       ret
     }
 
-    def isWritten(): Bool = {
-      val size_mapping = SizeMapping(0, memory_size)
-      val ret = False
-      busCtrl.onWritePrimitive(address = size_mapping, false, ""){ ret := True }
-      ret
-    }
-
-
-    val data = Bits(busCtrl.busDataWidth bits)
-    busCtrl.nonStopWrite(data)
-
-    val is_written = isWritten()
+    val is_read = isRead()
     val is_read_first = isFirstRead()
-    val is_written_first = isFirstWritten()
-    val is_written_last = isLastWritten()
-
-    val expected = Reg(UInt(widthOf(busCtrl.writeAddress) bits))
-    val write_data = Reg(Bits(memDataWidth bits))
-
-    when (is_written_first) {
-      expected := busCtrl.writeAddress + busCtrl.busDataWidth / 8
-      write_data := data.resize(memDataWidth)
-      //write_data := data.resize(memDataWidth) |<< ((cpu_words_per_memory_word - 1) * busCtrl.busDataWidth
-    }
-
-    when (is_written & (expected === busCtrl.writeAddress)) {
-      expected := busCtrl.writeAddress + busCtrl.busDataWidth / 8
-      write_data := (write_data |<< busCtrl.busDataWidth) | data.resize(memDataWidth)
-    }
-
-    val is_written_last_d1 = RegNext(is_written_last)
-    val mem_wr_addr = RegNext((busCtrl.writeAddress >> bytes_to_memory_word_shift).resize(memAddressWidth) & ~U(bytes_to_memory_word_mask >> bytes_to_memory_word_shift, memAddressWidth bits))
-
-    io.portA.en := True
 
     val mem_read_addr = UInt(memAddressWidth bits)
     mem_read_addr := (busCtrl.readAddress >> bytes_to_memory_word_shift).resize(memAddressWidth)
 
-    val cpu_word_of_memory_word = UInt((bytes_to_memory_word_shift - bytes_to_cpu_word_shift) bits)
-    cpu_word_of_memory_word := (busCtrl.readAddress >> bytes_to_cpu_word_shift).resize(bytes_to_memory_word_shift - bytes_to_cpu_word_shift) & U(cpu_word_to_memory_word_mask, (bytes_to_memory_word_shift - bytes_to_cpu_word_shift) bits)
+    // addresses the CPU word inside the memory word- @TODO what if zero?
+    val read_cpu_word_of_memory_word = UInt(cpu_word_to_memory_word_shift bits)
+    // calculate which CPU word is addressed, then reduce to only the CPU word index inside the memory word
+    read_cpu_word_of_memory_word := (busCtrl.readAddress >> bytes_to_cpu_word_shift).resize(cpu_word_to_memory_word_shift) & U(cpu_word_to_memory_word_mask, cpu_word_to_memory_word_shift bits)
 
-    val bus_read_data = Bits(busCtrl.busDataWidth bits)
-    bus_read_data := (io.portA.rdData >> (cpu_word_of_memory_word * busCtrl.busDataWidth)).resize(busCtrl.busDataWidth)
-    busCtrl.readPrimitive(bus_read_data, SizeMapping(0, memory_size), 0, documentation = null)
+    //val bus_read_data = Bits(busCtrl.busDataWidth bits)
+    //// @TODO this might be expensive due to the MUX for variable number 'read_cpu_word_of_memory_word'
+    //// @TODO maybe also only allow sequential read access to all CPU words in memory, like with write?
+    //bus_read_data := (io.portA.rdData >> (read_cpu_word_of_memory_word * busCtrl.busDataWidth)).resize(busCtrl.busDataWidth)
+    //busCtrl.readPrimitive(bus_read_data, SizeMapping(0, memory_size), 0, documentation = null)
 
     // drive read address on memory
-    io.portA.addr := mem_read_addr //(busCtrl.readAddress >> bytes_to_memory_word_shift).resize(memAddressWidth) & ~U(bytes_to_memory_word_mask >> bytes_to_memory_word_shift, memAddressWidth bits)
+    io.portA.addr := mem_read_addr
     when (is_written_last_d1) {
       io.portA.addr := mem_wr_addr
     }
 
-    io.portA.wrData := write_data
+    io.portA.wrData := write_data.resize(memDataWidth)
     io.portA.wr := RegNext(is_written_last)
 
     io.portB.en := True
@@ -275,6 +300,13 @@ case class LookupMemAxi4(wordWidth : Int, wordCount : Int, busCfg : Axi4Config) 
     y
   }
 
+  def nextPowerofTwo2(x: Int): Int = {
+    var y = x - 1
+    for (z <- 1 to 16) y = y | (y >> z)
+    y + 1
+  }
+
+
   /* calculate the bus slave address width needed to address the lookup table */
   val bytes_per_cpu_word = busCfg.dataWidth / 8
   val bus_words_per_memory_word = (wordWidth + busCfg.dataWidth - 1) / busCfg.dataWidth
@@ -302,7 +334,7 @@ object LookupMemAxi4Verilog {
   def main(args: Array[String]) {
     val config = SpinalConfig()
     config.generateVerilog({
-      val toplevel = new LookupMemAxi4(65, 1024, Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+      val toplevel = new LookupMemAxi4(33, 1024, Axi4Config(32, 32, 2, useQos = false, useRegion = false))
       XilinxPatch(toplevel)
     })
   }

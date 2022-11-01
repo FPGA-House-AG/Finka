@@ -28,8 +28,12 @@ rtl:
 	# make -j8 -C software/c/finka/hello_world clean all DEBUG=yes
 	sbt "runMain finka.FinkaWithMemoryInit; runMain finka.LookupMemAxi4Verilog"
 
+# repeatedly build RTL whenever Scala/SpinalHDL source changes
 repl:
-	sbt "~runMain finka.FinkaWithMemoryInit"
+	sbt "~ \
+	runMain finka.FinkaWithMemoryInit; \
+	runMain finka.LookupMemAxi4Verilog \
+	"
 
 # run in terminal #1
 sim: #use_dev_spinal

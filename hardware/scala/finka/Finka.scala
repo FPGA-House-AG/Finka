@@ -456,7 +456,7 @@ class Finka(val config: FinkaConfig) extends Component{
       )
     )
 
-    val lookupTable = LookupMemAxi4(63, 128, busconfig)
+    val lookupTable = LookupMemAxi4(33, 128, busconfig)
     lookupTable.io.ctrlbus << lookupAxi4SharedBus.toAxi4()
 
 
