@@ -617,7 +617,7 @@ object FinkaSim {
 
     val simConfig = SimConfig
     .allOptimisation
-    .withFstWave
+    //.withFstWave
     //.withWaveDepth(10) // does not work with Verilator, use SimTimeout()
     .addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
 
@@ -647,7 +647,7 @@ object FinkaSim {
       axiClockDomain.forkStimulus(mainClkPeriod)
 
       // stop after 1M clocks to prevent disk wearout
-      SimTimeout(100000 * mainClkPeriod)
+      //SimTimeout(100000 * mainClkPeriod)
 
       val packetClockDomain = ClockDomain(dut.io.packetClk)
       packetClockDomain.forkStimulus(packetClkPeriod)

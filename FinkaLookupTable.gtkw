@@ -1,0 +1,76 @@
+[*]
+[*] GTKWave Analyzer v3.3.86 (w)1999-2017 BSI
+[*] Tue Nov  1 19:08:39 2022
+[*]
+[dumpfile] "/home/vexriscv/project/Finka/simWorkspace/Finka/test.fst"
+[dumpfile_mtime] "Tue Nov  1 15:04:21 2022"
+[dumpfile_size] 9443336
+[savefile] "/home/vexriscv/project/Finka/FinkaLookupTable.gtkw"
+[timestart] 12465000
+[size] 3840 2066
+[pos] -1 -1
+*-16.000000 12548000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] TOP.
+[treeopen] TOP.Finka.
+[treeopen] TOP.Finka.axi_lookupTable.
+[sst_width] 646
+[signals_width] 616
+[sst_expanded] 1
+[sst_vpaned_height] 1071
+@22
+TOP.Finka.axi_lookupTable.mem.io_portA_addr[6:0]
+@28
+TOP.Finka.axi_lookupTable.mem.io_portA_wr
+@22
+TOP.Finka.axi_lookupTable.mem.io_portA_addr[6:0]
+@200
+-
+-
+@28
+TOP.Finka.axi_lookupTable.bridge_is_written
+TOP.Finka.axi_lookupTable.bridge_is_written_first
+TOP.Finka.axi_lookupTable.bridge_is_written_last
+@200
+-
+@28
+TOP.Finka.axi_lookupTable.io_ctrlbus_ar_ready
+TOP.Finka.axi_lookupTable.io_ctrlbus_ar_valid
+@22
+TOP.Finka.axi_lookupTable.io_ctrlbus_ar_payload_addr[9:0]
+@200
+-
+@22
+TOP.Finka.axi_lookupTable.mem_io_portA_addr[6:0]
+TOP.Finka.axi_lookupTable.mem_io_portA_wrData[32:0]
+@28
+TOP.Finka.axi_lookupTable.mem.io_portA_wr
+TOP.Finka.axi_lookupTable.bridge_cycle
+TOP.Finka.axi_lookupTable.bridge_all
+@200
+-
+@22
+TOP.Finka.axi_lookupTable.io_ctrlbus_r_payload_data[31:0]
+@28
+TOP.Finka.axi_lookupTable.io_ctrlbus_r_ready
+TOP.Finka.axi_lookupTable.io_ctrlbus_r_valid
+TOP.Finka.axi_lookupTable.bridge_readState[1:0]
+@22
+TOP.Finka.axi_lookupTable.bridge_bus_read_data[31:0]
+@28
+TOP.Finka.io_axiClk
+@200
+-
+@28
+TOP.Finka.io_packetClk
+TOP.Finka.axi_lookupTable.mem.io_portB_clk
+TOP.Finka.axi_lookupTable.mem.io_portB_rst
+@22
+TOP.Finka.axi_lookupTable.mem.io_portB_addr[6:0]
+TOP.Finka.axi_lookupTable.mem.io_portB_rdData[32:0]
+@29
+TOP.Finka.axi_core_cpu_iBus_cmd_valid
+@28
+TOP.Finka.axi_core_cpu_dBus_cmd_payload_wr
+TOP.Finka.axi_core_cpu_dBus_cmd_valid
+[pattern_trace] 1
+[pattern_trace] 0

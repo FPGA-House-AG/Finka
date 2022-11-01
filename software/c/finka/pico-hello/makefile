@@ -60,7 +60,12 @@ RISCV_OBJDUMP = $(CROSS_COMPILE)objdump
 RISCV_CC=$(CROSS_COMPILE)gcc
 RISCV_GDB=$(CROSS_COMPILE)gdb
 
-CFLAGS += -MD -fstrict-volatile-bitfields -fno-strict-aliasing -specs=picolibc.specs -save-temps=obj -Wunused -Wuninitialized
+# https://github.com/picolibc/picolibc
+# -specs=picolibc.specs
+# https://github.com/picolibc/picolibc/blob/main/doc/printf.md
+# -DPICOLIBC_INTEGER_PRINTF_SCANF
+
+CFLAGS += -MD -fstrict-volatile-bitfields -fno-strict-aliasing -specs=picolibc.specs -save-temps=obj -Wunused -Wuninitialized -DPICOLIBC_INTEGER_PRINTF_SCANF
 LDFLAGS += -lgcc -mcmodel=medany -T$(LDSCRIPT) -Wl,-Bstatic,-Map,$(OBJDIR)/$(PROJ_NAME).map,--print-memory-usage
 #  -nostartfiles -nostdlib -ffreestanding 
 #LDFLAGS += -lgcc -lc -lg -nostdlib  -lgcc  -msave-restore    --strip-debug,

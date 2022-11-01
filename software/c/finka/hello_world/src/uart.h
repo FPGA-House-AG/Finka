@@ -32,6 +32,11 @@ static void uart_write(Uart_Reg *reg, uint32_t data){
 	reg->DATA = data;
 }
 
+static uint32_t uart_read(Uart_Reg *reg) {
+	while(uart_readOccupancy(reg) == 0);
+	return reg->DATA;
+}
+
 static void uart_applyConfig(Uart_Reg *reg, Uart_Config *config){
 	reg->CLOCK_DIVIDER = config->clockDivider;
 	reg->FRAME_CONFIG = ((config->dataLength-1) << 0) | (config->parity << 8) | (config->stop << 16);

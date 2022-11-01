@@ -23,6 +23,7 @@ typedef struct {
 static uint32_t uart_writeAvailability(Uart_Reg *reg){
 	return (reg->STATUS >> 16) & 0xFF;
 }
+
 static uint32_t uart_readOccupancy(Uart_Reg *reg){
 	return reg->STATUS >> 24;
 }
@@ -30,6 +31,11 @@ static uint32_t uart_readOccupancy(Uart_Reg *reg){
 static void uart_write(Uart_Reg *reg, uint32_t data){
 	while(uart_writeAvailability(reg) == 0);
 	reg->DATA = data;
+}
+
+static uint32_t uart_read(Uart_Reg *reg) {
+	while(uart_readOccupancy(reg) == 0);
+	return reg->DATA;
 }
 
 static void uart_applyConfig(Uart_Reg *reg, Uart_Config *config){

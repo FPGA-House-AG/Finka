@@ -143,7 +143,7 @@ int packet_recv(uint32_t *p, int len)
 
 void main() {
 	uart_applyConfig(UART, &uart_cfg);
-    //println("Hello world! I am Finka.");
+    println("Hello world! I am Finka.");
 
     uint32_t identifier = *((volatile uint32_t *)AXI_M1 + 0x1000/4);
     uint32_t version = *((volatile uint32_t *)AXI_M1 + 0x1000/4);
