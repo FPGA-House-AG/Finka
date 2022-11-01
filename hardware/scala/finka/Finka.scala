@@ -458,10 +458,7 @@ class Finka(val config: FinkaConfig) extends Component{
 
     val lookupTable = LookupMemAxi4(33, 128, busconfig)
     lookupTable.io.ctrlbus << lookupAxi4SharedBus.toAxi4()
-
-
     //val x =  Axi4SharedToBram(addressAxiWidth = 8, addressBRAMWidth = 8, dataWidth = 32, idWidth = 0)
-
   }
 
   val prefix = new ClockingArea(packetClockDomain) {
@@ -492,6 +489,21 @@ class Finka(val config: FinkaConfig) extends Component{
   io.update5 := prefix.regs(5)
   io.update6 := prefix.regs(6)
   io.do_update := prefix.do_update
+
+  val lookupRxSessionID = new ClockingArea(packetClockDomain) {
+
+    val counter = Reg(U(0, 6 bits))
+
+    // pretend to lookup at index 0x20
+    axi.lookupTable.io.clk := packetClockDomain.readClockWire
+    axi.lookupTable.io.rst := packetClockDomain.readResetWire
+    axi.lookupTable.io.en := True
+    axi.lookupTable.io.wr := False
+    axi.lookupTable.io.wrData := 0
+    axi.lookupTable.io.addr := counter.resized
+    counter := counter + 1
+  }
+
 
   // packet generator
   val packet = new ClockingArea(packetClockDomain) {
