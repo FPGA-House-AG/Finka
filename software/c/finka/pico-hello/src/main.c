@@ -3,13 +3,6 @@
 
 #include "finka.h"
 
-void print(const char *str){
-  while (*str) {
-    uart_write(UART, *str);
-    str++;
-  }
-}
-
 Uart_Config uart_cfg = {
   .dataLength = 8,
   .parity = 0,
@@ -46,7 +39,6 @@ static int uart_getc(FILE *file)
 	uart_putc(c, stdout);
 	return (int)c;
 }
-
 
 /* Create a single FILE object for stdin and stdout */
 static FILE __stdio = FDEV_SETUP_STREAM(uart_putc, uart_getc, NULL, _FDEV_SETUP_RW);
