@@ -15,11 +15,14 @@ debug_in_sim:
 	#kill -9 $$PIDGDB
 
 # load and run via GDB in batch mode, after detecting the JTAG TCP
+# assumes FinkaSim is running using sbt, and sbt.log exists.
 sim_batch_debug:
 	set -e
 	# @TODO maybe do not rely on log, but on netstat -tln | grep port?
-	tail -F sbt.log | sed '/WAITING FOR TCP JTAG CONNECTION/ q' > /dev/null
+	tail -F -n +1 sbt.log | sed '/WAITING FOR TCP JTAG CONNECTION/ q' > /dev/null
+	echo "Starting GDB/OpenOCD"
 	make -C software/c/finka/hello_world   batch_debug    DEBUG=yes
+	#make -C software/c/finka/pico-hello   batch_debug    DEBUG=yes
 
 # build program for SoC, and RTL of SoC
 rtl:
