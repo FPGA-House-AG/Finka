@@ -12,7 +12,8 @@ typedef struct
 } Timer_Reg;
 
 static void timer_init(Timer_Reg *reg){
-	reg->CLEARS_TICKS  = 0;
+	reg->CLEARS_TICKS  = 0x0000FFFF;
+  //reg->LIMIT = 1000 - 1;
 	reg->VALUE = 0;
 }
 

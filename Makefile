@@ -42,8 +42,12 @@ repl:
 sim: #use_dev_spinal
 	set -e
 	rm -rf sbt.log
+	# build software, as RAM is initialized with interface
+	# see Finka.scala onChipRamHexFile
 	make -j8 -C software/c/finka/hello_world clean
 	make -j8 -C software/c/finka/hello_world all DEBUG=yes
+	make -j8 -C software/c/finka/pico-hello clean
+	make -j8 -C software/c/finka/pico-hello all DEBUG=yes
 	(sbt "runMain finka.FinkaSim" | tee sbt.log)
 	# @TODO this one could drive some automated tests
 	#(sbt "test:runMain vexriscv.FinkaSim" | tee sbt.log)

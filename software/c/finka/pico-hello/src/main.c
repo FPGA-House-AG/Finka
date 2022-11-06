@@ -26,7 +26,7 @@ static int uart_putc(char c, FILE *file) {
 static int uart_getc(FILE *file)
 {
 	uint8_t	c;
-  (void)file;
+	(void)file;
 	/* Read input */
 	c = (uint8_t)uart_read(UART);
 
@@ -75,9 +75,12 @@ void main() {
 		printf("Good to meet you, %s", buf);
 	}
 #endif
-
+  // 1 microsecond ticks to timers
+  TIMER_PRESCALER->LIMIT = 250 - 1;
+  timer_init(TIMER_A);
   while (count < 200) {
-    printf("hello world from pico-hello! %d\n", count);
+    //printf("hello world from pico-hello! %u\n", *((volatile uint32_t *)(&(TIMER_A->VALUE))));
+    printf("hello world from pico-hello! %u\n", TIMER_A->VALUE);
     count += 2;
   }
 }
