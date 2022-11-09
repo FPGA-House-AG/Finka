@@ -59,7 +59,7 @@ object FinkaConfig{
     val config = FinkaConfig(
       corundumDataWidth = 512,
       axiFrequency = 250 MHz,
-      onChipRamSize = 64 kB,
+      onChipRamSize = 256 kB,
       onChipRamHexFile = null, //"software/c/finka/hello_world/build/hello_world.hex",
 
       /* prot signals but no last signal - however SpinalHDL/Axi4 assumes Last for Axi4* classes */
@@ -214,8 +214,7 @@ class Finka(val config: FinkaConfig) extends Component{
     // AXI4 master towards an external AXI4 peripheral
     //val extAxi4Master = master(Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false)))
 
-    // AXI4 slave from (external) PCIe bridge
-    val pcieAxi4Slave = slave(Axi4(pcieAxi4Config))
+
 
     // Peripherals IO
     val gpioA         = master(TriStateArray(32 bits))
@@ -236,11 +235,14 @@ class Finka(val config: FinkaConfig) extends Component{
     val update = out UInt(64 bits)
     val commit = out Bool()
 
-    // in packetClk clock domain, Ethernet/encrypted side
+    // AXI4 slave from (external) PCIe bridge
+    val pcieAxi4Slave = slave(Axi4(pcieAxi4Config))
+    
+    // in packetClk clock domain, Ethernet/encrypted side, AXIS Corundum TDATA/TKEEP/TUSER
     val frametxm = master Stream new Fragment(CorundumFrame(corundumDataWidth))
     val framerxs = slave Stream new Fragment(CorundumFrame(corundumDataWidth))
 
-    // in packetClk clock domain, PCIe/plaintext side
+    // in packetClk clock domain, PCIe/plaintext side AXIS Corundum TDATA/TKEEP/TUSER
     //val frametxs = slave Stream new Fragment(CorundumFrame(corundumDataWidth))
     //val framerxm = master Stream new Fragment(CorundumFrame(corundumDataWidth))
   }
@@ -509,20 +511,27 @@ class Finka(val config: FinkaConfig) extends Component{
   }
 
 
-  // packet generator
+  // packet clock domain
   val packet = new ClockingArea(packetClockDomain) {
     val packetTxAxi4SharedBus = Axi4Shared(busconfig)
     val packetRxAxi4SharedBus = Axi4Shared(busconfig)
 
     val packetWriter = CorundumFrameWriterAxi4(corundumDataWidth, busconfig)
+
+    // received on Ethernet port, going into SoC
+    val dropOnFull = CorundumFrameDrop(corundumDataWidth)
+    val readerStash = CorundumFrameStash(corundumDataWidth, 32)
     val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
+    readerStash.io.sink << dropOnFull.io.source 
+    dropOnFull.io.drop := (readerStash.io.availability < 2)
+    packetReader.io.input << readerStash.io.source
 
     // connect to bus
     packetWriter.io.ctrlbus << packetTxAxi4SharedBus.toAxi4()
     packetReader.io.ctrlbus << packetRxAxi4SharedBus.toAxi4()
   }
   io.frametxm << packet.packetWriter.io.output
-  io.framerxs >> packet.packetReader.io.input
+  io.framerxs >> packet.dropOnFull.io.sink
 
   // bring axi.packetTxAxi4SharedBus into packet clock domain
   // and from Shared to Full bus because BusControllerFactory does not support Axi4Shared?
@@ -600,7 +609,7 @@ object FinkaWithMemoryInit{
   def main(args: Array[String]) {
     val config = SpinalConfig()
     val verilog = config.generateVerilog({
-      val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex", onChipRamSize = 64 kB)
+      val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex")
       val toplevel = new Finka(socConfig)
       // return this
       XilinxPatch(toplevel)
@@ -615,8 +624,9 @@ object FinkaSim {
     val simSlowDown = false
     val socConfig = FinkaConfig.default.copy(
       corundumDataWidth = 128,
-      onChipRamSize = 64 kB,
-      onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
+      //onChipRamSize = 256 kB,
+      //onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
+      onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
     )
 
     val simConfig = SimConfig

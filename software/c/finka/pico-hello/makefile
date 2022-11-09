@@ -66,7 +66,7 @@ RISCV_GDB=$(CROSS_COMPILE)gdb
 # -DPICOLIBC_INTEGER_PRINTF_SCANF
 
 CFLAGS += -MD -fstrict-volatile-bitfields -fno-strict-aliasing -specs=picolibc.specs -save-temps=obj -Wunused -Wuninitialized -DPICOLIBC_INTEGER_PRINTF_SCANF
-LDFLAGS += -lgcc -mcmodel=medany -T$(LDSCRIPT) -Wl,-Bstatic,-Map,$(OBJDIR)/$(PROJ_NAME).map,--print-memory-usage
+LDFLAGS += -lgcc -mcmodel=medany -nostartfiles -T$(LDSCRIPT) -Wl,-Bstatic,-Map,$(OBJDIR)/$(PROJ_NAME).map,--print-memory-usage
 #  -nostartfiles -nostdlib -ffreestanding 
 #LDFLAGS += -lgcc -lc -lg -nostdlib  -lgcc  -msave-restore    --strip-debug,
 

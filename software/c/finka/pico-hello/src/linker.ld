@@ -4,4 +4,4 @@ __ram = 0x00808000;
 __ram_size = 0x8000;
 __stack_size = 1k;
 
-INCLUDE picolibc.ld
+INCLUDE src/picolibc-vexriscv.ld
