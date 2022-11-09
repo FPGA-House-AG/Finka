@@ -6,3 +6,5 @@ cpu0.yaml
 target
 .bsp/sbt.json
 software/c/finka/*/build
+vivado*.jou
+vivado*.str
