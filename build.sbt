@@ -35,9 +35,8 @@ lazy val spinalHdlLib = ProjectRef(file(spinalDir), "lib")
 lazy val spinalHdlIdslPlugin = ProjectRef(file(spinalDir), "idslplugin")
 lazy val spinalHdlSim = ProjectRef(file(spinalDir), "sim")
 
-lazy val vexRiscv = RootProject(file("../VexRiscv.pinned")) // bc3c59cd20b702ef3247a56cb4868be4f45b26ad
-// e1620c68b2bfcff7ad1bc8ce665cf4ce29452141
-lazy val spinalCorundum = RootProject(file("../SpinalCorundum")) // fcecdbb6456ee29f4d64e43d2682555d1d68ddef
+lazy val vexRiscv = RootProject(file("../VexRiscv.pinned")) // 87c8822f55c0674d24a55b2d83255b60f8a6146e
+lazy val spinalCorundum = RootProject(file("../SpinalCorundum")) // 29e0ab65c5a077b1a4c1ee47f40c31b526537eda
 
 fork := true
 // forward standard input of the sbt process to the forked process
