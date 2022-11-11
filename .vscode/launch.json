@@ -10,7 +10,7 @@
 //            "toolchainBinDir": "/home/vexriscv/x-tools/bin"
 //        },
         {
-            // using Native Debugging / WebFreak extension
+            // depends on VSCode extension "Native Debug" from WebFreak
             "name": "GDB OpenOCD using OpenOCD pipe",
             "type": "gdb",
             "request": "attach",
