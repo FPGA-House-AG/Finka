@@ -8,3 +8,7 @@ target
 software/c/finka/*/build
 vivado*.jou
 vivado*.str
+iverilog_dump.v
+*.fst
+cocotb/**/results.xml
+cocotb/**/sim_build
