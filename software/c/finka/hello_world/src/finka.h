@@ -19,5 +19,6 @@
 #define AXI_M1      ((volatile uint32_t *)(0x00C00000))
 #define AXI_TX      ((volatile uint32_t *)AXI_M1 + 0x1000)
 #define AXI_RX      ((volatile uint32_t *)AXI_M1 + 0x2000)
+#define AXI_LUT     ((volatile uint32_t *)AXI_M1 + 0x3000)
 
 #endif /* __MURAX_H__ */

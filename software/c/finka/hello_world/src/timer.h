@@ -12,7 +12,7 @@ typedef struct
 } Timer_Reg;
 
 static void timer_init(Timer_Reg *reg){
-	reg->CLEARS_TICKS  = 0;
+	reg->CLEARS_TICKS  = 0x0000FFFF;
 	reg->VALUE = 0;
 }
 

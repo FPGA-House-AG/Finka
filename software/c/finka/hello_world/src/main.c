@@ -37,6 +37,8 @@ Uart_Config uart_cfg = {
 };
 
 /* send packet to the downstream transmit FIFO */
+/* CorundumFrameWriter.scala
+ * address 0x80 must ONLY be written before writing the last CPU word */
 void packet_send(uint32_t *p, int len)
 {
 	if (len == 0) return 0;
@@ -67,12 +69,14 @@ void packet_send(uint32_t *p, int len)
 			space = *((volatile uint32_t *)AXI_M1 + 0x1040/4);
 		}
 		int addr = word_num % (corundumDataWidth / 32);
-		/* last 32-bit word, assert TLAST and indicate empty bytes */
+		/* last 32-bit word, assert TLAST and indicate empty bytes (@TODO only needed if remaining != 4) */
 		*((volatile uint32_t *)AXI_M1 + 0x1080/4) = sizeof(uint32_t) - remaining;
+		/* write last bytes */
 		*((volatile uint32_t *)AXI_M1 + 0x1100/4 + addr) = p[word_num];
 	}
 }
 
+/* CorundumFrameReader.scala */
 int packet_rx_available()
 {
 	return *((volatile uint32_t *)AXI_M1 + 0x2040/4);
@@ -80,6 +84,7 @@ int packet_rx_available()
 
 /* receive packets from the downstream receive FIFO */
 /* downstream means PHY facing */
+/* CorundumFrameReader.scala */
 int packet_recv(uint32_t *p, int len)
 {
 	if (len == 0) return 0;
@@ -110,10 +115,10 @@ int packet_recv(uint32_t *p, int len)
 		// { avail > 0 }, so we can assert that valid must be true
 		while (!valid) {
 			valid_last_empty = *((volatile uint32_t *)AXI_M1 + 0x2080/4);
-			valid = (valid_last_empty & (1 << 31)) >> 31;
+			valid = !!(valid_last_empty & (1 << 31));
 		}
 		// { valid word available, check last flag }
-		last = (valid_last_empty & (1 << 30)) >> 30;
+		last = !!(valid_last_empty & (1 << 30));
 
 		// { valid word available }, determine number of empty bytes in stream word
 		int empty_bytes = valid_last_empty & 0xFFFFu;
@@ -164,13 +169,19 @@ void main() {
 		ptr[i] = i;
 	}
 
+	// loopback packets
 	while (1) {
 		int packet_len = packet_recv(packet, 512);
-		print("L:");
+		print("R:");
 		print_int(packet_len);
 		print("\n");
 		if (packet_len > 0) {
 			packet_send(packet, packet_len);
+			print("T:");
+			print_int(packet_len);
+			print("\n");
+		} else {
+			print("overflow?\n");
 		}
 	}
 
@@ -185,7 +196,10 @@ void main() {
 
     const int nleds = 8;
     const int nloops = 20000;
-    //timer_init(TIMER_A);
+	// @TODO causes UART FRAMING ERRORS w/ picolibc
+    timer_init(TIMER_A);
+			println("Hello world! I am Finka again.");
+
     while(1){
     	for(unsigned int i=0;i<nleds-1;i++){
     		GPIO_A->OUTPUT = 1<<i;

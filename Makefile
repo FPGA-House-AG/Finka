@@ -42,8 +42,9 @@ repl:
 sim: #use_dev_spinal
 	set -e
 	rm -rf sbt.log
-	# build software, as RAM is initialized with interface
+	# build software, as RAM is initialized with software
 	# see Finka.scala onChipRamHexFile
+	# note only one of those will be in RAM
 	make -j8 -C software/c/finka/hello_world clean
 	make -j8 -C software/c/finka/hello_world all DEBUG=yes
 	make -j8 -C software/c/finka/pico-hello clean
@@ -57,6 +58,7 @@ sim: #use_dev_spinal
 debug:
 	set -e
 	tail -n +0 -F sbt.log | sed '/WAITING FOR TCP JTAG CONNECTION/ q' > /dev/null
+	#make -C software/c/finka/hello_world   debug    DEBUG=yes
 	make -C software/c/finka/hello_world   debug    DEBUG=yes
 
 # run in terminal #3

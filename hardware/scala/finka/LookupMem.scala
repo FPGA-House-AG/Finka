@@ -19,7 +19,8 @@ import scala.math.pow
 
 // true dual port ram with independent clocks, symmetric data widths
 case class LookupMem(memDataWidth : Int,
-                     wordCount : Int) extends Component {
+                     wordCount : Int,
+                     lookupCD: ClockDomain) extends Component {
 
   //val bram_bus_config = BRAMConfig(memDataWidth, log2Up(wordCount))
 
@@ -37,8 +38,8 @@ case class LookupMem(memDataWidth : Int,
       val rdData = out Bits (memDataWidth bits)
     }
     val portB = new Bundle {
-      val clk = in Bool()
-      val rst = in Bool()
+      //val clk = in Bool()
+      //val rst = in Bool()
       //val portB = BRAM()
       val en = in Bool()
       val wr = in Bool()
@@ -59,7 +60,7 @@ case class LookupMem(memDataWidth : Int,
       data    = io.portA.wrData
     ))
   }
-  val areaB = new ClockingArea(ClockDomain(io.portB.clk, io.portB.rst)) {
+  val areaB = new ClockingArea(lookupCD) {
     io.portB.rdData := RegNext(mem.readWriteSync(
       enable  = io.portB.en,
       address = io.portB.addr,
@@ -69,7 +70,7 @@ case class LookupMem(memDataWidth : Int,
   }
 
   // https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
-  def nextPowerofTwo(x: Int): Int = {
+  def powOf2Up(x: Int): Int = {
     var y = x
     y = y - 1
     y = y | (y >> 1)
@@ -91,7 +92,7 @@ case class LookupMem(memDataWidth : Int,
     printf("bus_words_per_memory_word    = %d (CPU writes needed to write one word into lookup table)\n", bus_words_per_memory_word)
     // for one memory word, calculate number of CPU words in the address space 
     // it is rounded up to the next power of two, so it will be 1, 2, 4, 8, 16 etc.
-    val cpu_words_per_memory_word = nextPowerofTwo(bus_words_per_memory_word)
+    val cpu_words_per_memory_word = powOf2Up(bus_words_per_memory_word)
     val bytes_per_memory_word = cpu_words_per_memory_word * bytes_per_cpu_word
     val bytes_to_cpu_word_shift = log2Up(bytes_per_cpu_word)
     val bytes_to_memory_word_shift = log2Up(bytes_per_memory_word)
@@ -279,10 +280,10 @@ object LookupMemAxi4 {
 }
 
 // slave must be naturally aligned
-case class LookupMemAxi4(wordWidth : Int, wordCount : Int, busCfg : Axi4Config) extends Component {
+case class LookupMemAxi4(wordWidth : Int, wordCount : Int, busCfg : Axi4Config, lookupCD: ClockDomain) extends Component {
 
   // https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
-  def nextPowerofTwo(x: Int): Int = {
+  def powOf2Up(x: Int): Int = {
     var y = x
     y = y - 1
     y = y | (y >> 1)
@@ -294,7 +295,7 @@ case class LookupMemAxi4(wordWidth : Int, wordCount : Int, busCfg : Axi4Config) 
     y
   }
 
-  def nextPowerofTwo2(x: Int): Int = {
+  def powOf2Up2(x: Int): Int = {
     var y = x - 1
     for (z <- 1 to 16) y = y | (y >> z)
     y + 1
@@ -304,7 +305,7 @@ case class LookupMemAxi4(wordWidth : Int, wordCount : Int, busCfg : Axi4Config) 
   /* calculate the bus slave address width needed to address the lookup table */
   val bytes_per_cpu_word = busCfg.dataWidth / 8
   val bus_words_per_memory_word = (wordWidth + busCfg.dataWidth - 1) / busCfg.dataWidth
-  val cpu_words_per_memory_word = nextPowerofTwo(bus_words_per_memory_word)
+  val cpu_words_per_memory_word = powOf2Up(bus_words_per_memory_word)
   val bytes_per_memory_word = cpu_words_per_memory_word * bytes_per_cpu_word
   val memory_space = wordCount * bytes_per_memory_word
   val memory_space_address_bits = log2Up(memory_space)
@@ -322,8 +323,8 @@ case class LookupMemAxi4(wordWidth : Int, wordCount : Int, busCfg : Axi4Config) 
     val ctrlbus = slave(Axi4(slaveCfg))
 
     // lookup
-    val clk = in Bool()
-    val rst = in Bool()
+    //val clk = in Bool()
+    //val rst = in Bool()
     val en = in Bool()
     val wr = in Bool()
     val addr = in UInt (memAddressWidth bits)
@@ -331,12 +332,12 @@ case class LookupMemAxi4(wordWidth : Int, wordCount : Int, busCfg : Axi4Config) 
     val rdData = out Bits (wordWidth bits)
   }
 
-  val mem = LookupMem(wordWidth, wordCount)
+  val mem = LookupMem(wordWidth, wordCount, lookupCD)
   val ctrl = new Axi4SlaveFactory(io.ctrlbus)
   val bridge = mem.driveFrom(ctrl)
 
-  mem.io.portB.clk := io.clk
-  mem.io.portB.rst := io.rst
+  //mem.io.portB.clk := io.clk
+  //mem.io.portB.rst := io.rst
   mem.io.portB.en := io.en
   mem.io.portB.wr := io.wr
   mem.io.portB.addr := io.addr
@@ -349,7 +350,7 @@ object LookupMemAxi4Verilog {
   def main(args: Array[String]) {
     val config = SpinalConfig()
     config.generateVerilog({
-      val toplevel = new LookupMemAxi4(33, 1024, Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+      val toplevel = new LookupMemAxi4(33, 1024, Axi4Config(32, 32, 2, useQos = false, useRegion = false), lookupCD = ClockDomain.current)
       XilinxPatch(toplevel)
     })
   }
@@ -361,7 +362,7 @@ object LookupMemVerilog {
     //config.addStandardMemBlackboxing(blackboxAll)
 
     val verilog = config.generateVerilog({
-      val toplevel = new LookupMem(memDataWidth = 32, wordCount = 1024)
+      val toplevel = new LookupMem(memDataWidth = 32, wordCount = 1024, lookupCD = ClockDomain.current)
       // return this
       toplevel
       //XilinxPatch(toplevel)

@@ -11,7 +11,7 @@
 //        },
         {
             // depends on VSCode extension "Native Debug" from WebFreak
-            "name": "GDB OpenOCD using OpenOCD pipe",
+            "name": "Native Debug GDB OpenOCD pipe picolibc",
             "type": "gdb",
             "request": "attach",
             "remote": false,
@@ -28,7 +28,8 @@
               "monitor [target current] configure -event gdb-detach {shutdown}",
               //"interrupt",
               "monitor reset halt",
-              "file software/c/finka/pico-hello/build/pico-hello.elf",
+              //"file software/c/finka/pico-hello/build/pico-hello.elf",
+              "file software/c/finka/hello_world/build/hello_world.elf",
               "load"
               //"break main",
               //"continue",

@@ -1,0 +1,156 @@
+[*]
+[*] GTKWave Analyzer v3.3.86 (w)1999-2017 BSI
+[*] Sat Nov 19 00:25:49 2022
+[*]
+[dumpfile] "/home/vexriscv/project/Finka/simWorkspace/Finka/test.fst"
+[dumpfile_mtime] "Sat Nov 19 00:18:54 2022"
+[dumpfile_size] 10106563
+[savefile] "/home/vexriscv/project/Finka/FinkaType123.gtkw"
+[timestart] 231900000
+[size] 3840 2030
+[pos] -1 -1
+*-21.000000 241658817 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] TOP.
+[treeopen] TOP.Finka.
+[treeopen] TOP.Finka.packet_packetReader.
+[treeopen] TOP.Finka.packet_packetWriter.
+[treeopen] TOP.Finka.packet_readerStash.
+[sst_width] 992
+[signals_width] 1230
+[sst_expanded] 1
+[sst_vpaned_height] 1020
+@28
+TOP.Finka.packet_packetReader.io_packetClk
+TOP.Finka.packet_packetReader.resetCtrl_packetReset
+@200
+-
+@24
+TOP.Finka.packet_readerStash.availability[5:0]
+@20000
+-
+@22
+TOP.Finka.packet_packetReader.io_input_payload_fragment_tdata[127:0]
+TOP.Finka.packet_packetReader.io_input_payload_fragment_tkeep[15:0]
+@28
+TOP.Finka.packet_packetReader.io_input_payload_fragment_tuser
+TOP.Finka.packet_packetReader.io_input_payload_last
+TOP.Finka.packet_packetReader.io_input_ready
+TOP.Finka.packet_packetReader.io_input_valid
+@200
+-
+-Drop
+@22
+TOP.Finka.packet_dropOnFull.sink_tdata[127:0]
+TOP.Finka.packet_dropOnFull.sink_tkeep[15:0]
+@28
+TOP.Finka.packet_dropOnFull.sink_tlast
+TOP.Finka.packet_dropOnFull.sink_tready
+TOP.Finka.packet_dropOnFull.sink_tuser
+TOP.Finka.packet_dropOnFull.sink_tvalid
+TOP.Finka.packet_dropOnFull.drop_y_packet
+TOP.Finka.packet_dropOnFull_drop
+TOP.Finka.packet_dropOnFull.y_drop
+@22
+TOP.Finka.packet_dropOnFull.source_tdata[127:0]
+TOP.Finka.packet_dropOnFull.source_tkeep[15:0]
+@28
+TOP.Finka.packet_dropOnFull.source_tlast
+TOP.Finka.packet_dropOnFull.source_tready
+TOP.Finka.packet_dropOnFull.source_tuser
+TOP.Finka.packet_dropOnFull.source_tvalid
+@200
+-
+-Stash FIFO
+@22
+TOP.Finka.packet_readerStash.sink_tdata[127:0]
+TOP.Finka.packet_readerStash.sink_tkeep[15:0]
+@28
+TOP.Finka.packet_readerStash.sink_tlast
+TOP.Finka.packet_readerStash.sink_tready
+TOP.Finka.packet_readerStash.sink_tuser
+TOP.Finka.packet_readerStash.sink_tvalid
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_packetClk
+@8022
+TOP.Finka.packet_readerStash.availability[5:0]
+@20000
+-
+@22
+TOP.Finka.packet_readerStash.fifo_io_availability[5:0]
+TOP.Finka.packet_readerStash.fifo.io_availability[5:0]
+TOP.Finka.packet_readerStash.fifo.io_occupancy[5:0]
+@20000
+-
+@24
+TOP.Finka.packet_readerStash.fifo.io_occupancy[5:0]
+@20000
+-
+@200
+-Reader FIFO Push
+@22
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_push_payload_fragment_tdata[127:0]
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_push_payload_fragment_tkeep[15:0]
+@28
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_push_payload_fragment_tuser
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_push_payload_last
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_push_ready
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_push_valid
+@24
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_occupancy[2:0]
+@22
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_pop_payload_fragment_tdata[127:0]
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_pop_payload_fragment_tkeep[15:0]
+@28
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_pop_payload_last
+@8024
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_occupancy[2:0]
+@20000
+-
+@200
+-Reader
+@28
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_pop_ready
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_pop_valid
+@22
+TOP.Finka.packet_packetReader.io_input_payload_fragment_tkeep[15:0]
+@28
+TOP.Finka.packet_packetReader.io_input_valid
+@22
+TOP.Finka.packet_packetReader.bridge_empty_bytes[4:0]
+@24
+TOP.Finka.packet_packetReader.bridge_full_bytes[4:0]
+@22
+TOP.Finka.packet_packetReader.bridge_full_words[4:0]
+@28
+TOP.Finka.packet_packetReader.bridge_addressed
+@22
+TOP.Finka.packet_packetReader.bridge_reg_idx[3:0]
+@28
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.logic_popping
+@22
+TOP.Finka.packet_packetReader.reader_io_output_queueWithOccupancy.io_pop_payload_fragment_tdata[127:0]
+@200
+-
+@22
+TOP.Finka.packet_packetReader.io_ctrlbus_ar_payload_addr[9:0]
+@28
+TOP.Finka.packet_packetReader.io_ctrlbus_ar_ready
+TOP.Finka.packet_packetReader.io_ctrlbus_ar_valid
+@22
+TOP.Finka.packet_packetReader.io_ctrlbus_r_payload_data[31:0]
+@28
+TOP.Finka.packet_packetReader.io_ctrlbus_r_ready
+TOP.Finka.packet_packetReader.io_ctrlbus_r_valid
+@200
+-
+@201
+-Writer
+@22
+TOP.Finka.packet_packetWriter.io_output_payload_fragment_tdata[127:0]
+TOP.Finka.packet_packetWriter.io_output_payload_fragment_tkeep[15:0]
+@28
+TOP.Finka.packet_packetWriter.io_output_payload_fragment_tuser
+TOP.Finka.packet_packetWriter.io_output_payload_last
+TOP.Finka.packet_packetWriter.io_output_ready
+TOP.Finka.packet_packetWriter.io_output_valid
+[pattern_trace] 1
+[pattern_trace] 0
