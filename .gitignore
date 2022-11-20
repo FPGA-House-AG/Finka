@@ -12,3 +12,12 @@ iverilog_dump.v
 *.fst
 cocotb/**/results.xml
 cocotb/**/sim_build
+# generate Verilog
+*.v
+*.sv
+# Python compiled
+*.pyc
+# hardware/test
+*.logTrace
+obj_dir/
+vivado-test-*
