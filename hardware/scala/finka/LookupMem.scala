@@ -350,7 +350,7 @@ object LookupMemAxi4Verilog {
   def main(args: Array[String]) {
     val config = SpinalConfig()
     config.generateVerilog({
-      val toplevel = new LookupMemAxi4(33, 1024, Axi4Config(32, 32, 2, useQos = false, useRegion = false), lookupCD = ClockDomain.current)
+      val toplevel = new LookupMemAxi4(33, 1024, Axi4Config(32, 32, 2, useQos = false, useRegion = false), lookupCD = ClockDomain.external("portb"))
       XilinxPatch(toplevel)
     })
   }

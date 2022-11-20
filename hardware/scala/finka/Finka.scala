@@ -557,22 +557,17 @@ class Finka(val config: FinkaConfig) extends Component{
   io.commit := prefix.commit
   io.update := prefix.update
 
-  //// Remove io_ prefix
-  //noIoPrefix()
+  // Execute the function renameAxiIO after the creation of the component
+  addPrePopTask(() => CorundumFrame.renameAxiIO(io))
 
-  //// Rename SpinalHDL library defaults to AXI naming convention
-  //private def renameIO(): Unit = {
-  //  io.flatten.foreach(bt => {
-  //    if(bt.getName().contains("_payload")) bt.setName(bt.getName().replace("_payload", ""))
-  //    if(bt.getName().contains("_fragment")) bt.setName(bt.getName().replace("_fragment", ""))
-  //    if(bt.getName().contains("_valid")) bt.setName(bt.getName().replace("_valid", "_tvalid"))
-  //    if(bt.getName().contains("_ready")) bt.setName(bt.getName().replace("_ready", "_tready"))
-  //    if(bt.getName().contains("_last")) bt.setName(bt.getName().replace("_last", "_tlast"))
-  //  })
-  //}
-
-  //// Execute the function renameIO after the creation of the component
-  //addPrePopTask(() => renameIO())
+  // Do more renaming
+  private def renameFinkaIO(): Unit = {
+    io.flatten.foreach(bt => {
+      if(bt.getName().contains("pcieAxi4Slave_")) bt.setName(bt.getName().replace("pcieAxi4Slave_", "pcie_axi_"))
+    })
+  }
+  // Execute the function renameAxiIO after the creation of the component
+  addPrePopTask(() => renameFinkaIO())
 }
 
 // https://gitter.im/SpinalHDL/SpinalHDL?at=5c2297c28d31aa78b1f8c969
@@ -626,19 +621,17 @@ object FinkaSim {
     val simSlowDown = false
     val socConfig = FinkaConfig.default.copy(
       corundumDataWidth = 128,
-      //onChipRamSize = 256 kB,
-      onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
-      //onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
+      //onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
+      onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
     )
 
     val simConfig = SimConfig
     .allOptimisation
-    //.withFstWave
-    //.withWaveDepth(10) // does not work with Verilator, use SimTimeout()
+    
     .addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
 
-    val waveform = true
-    if (waveform) simConfig.withFstWave
+    val waveform = false
+    if (waveform) simConfig.withFstWave//.withWaveDepth(10) // does not work with Verilator, use SimTimeout()
 
     simConfig.compile{
       val dut = new Finka(socConfig)
