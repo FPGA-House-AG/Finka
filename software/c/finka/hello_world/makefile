@@ -12,7 +12,7 @@ SRCS = 	$(wildcard src/*.c) \
 
 OBJDIR = build
 
-INC  =
+INC  = -I../hal
 LIBS =
 LIBSINC = -L$(OBJDIR)
 LDSCRIPT = ./src/linker.ld
