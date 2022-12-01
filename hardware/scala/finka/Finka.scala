@@ -586,27 +586,42 @@ object XilinxPatch {
   }
 }
 
-
-object Finka{
+object Finka {
   def main(args: Array[String]) {
-    val config = SpinalConfig()
-    val verilog = config.generateVerilog({
+    val verilog = Config.spinal.generateVerilog({
       val toplevel = new Finka(FinkaConfig.default)
-      // return this
-      XilinxPatch(toplevel)
+      toplevel
     })
-    //verilog.printPruned()
+    verilog.printPruned()
+    val vhdl = Config.spinal.generateVhdl({
+      val toplevel = new Finka(FinkaConfig.default)
+      toplevel
+    })
+    //vhdl.printPruned()
   }
 }
 
 object FinkaWithMemoryInit{
   def main(args: Array[String]) {
-    val config = SpinalConfig()
+    val config = Config.spinal //SpinalConfig()
     val verilog = config.generateVerilog({
       val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex")
       val toplevel = new Finka(socConfig)
       // return this
-      XilinxPatch(toplevel)
+      toplevel
+    })
+    //verilog.printPruned()
+  }
+}
+
+object FinkaWireguard{
+  def main(args: Array[String]) {
+    val config = Config.spinal //SpinalConfig()
+    val verilog = config.generateVerilog({
+      val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "../wg_lwip/build-riscv/echop.hex")
+      val toplevel = new Finka(socConfig)
+      // return this
+      toplevel
     })
     //verilog.printPruned()
   }
@@ -621,14 +636,16 @@ object FinkaSim {
     val simSlowDown = false
     val socConfig = FinkaConfig.default.copy(
       corundumDataWidth = 128,
-      //onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
-      onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
+      onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
+      //onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
     )
 
     val simConfig = SimConfig
+    // synchronous resets, see Config.scala
+    .withConfig(Config.spinal)
     .allOptimisation
-    
-    .addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
+    //.withGhdl//.addSimulatorFlag("--ieee-asserts=disable-at-0")
+    .withVerilator.addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
 
     val waveform = false
     if (waveform) simConfig.withFstWave//.withWaveDepth(10) // does not work with Verilator, use SimTimeout()
