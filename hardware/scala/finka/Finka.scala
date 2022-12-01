@@ -566,8 +566,11 @@ class Finka(val config: FinkaConfig) extends Component{
       if(bt.getName().contains("pcieAxi4Slave_")) bt.setName(bt.getName().replace("pcieAxi4Slave_", "pcie_axi_"))
     })
   }
+
+
   // Execute the function renameAxiIO after the creation of the component
   addPrePopTask(() => renameFinkaIO())
+  addPrePopTask(() => CorundumFrame.renameAxiIO(io))
 }
 
 // https://gitter.im/SpinalHDL/SpinalHDL?at=5c2297c28d31aa78b1f8c969
