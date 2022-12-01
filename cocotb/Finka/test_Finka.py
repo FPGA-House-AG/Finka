@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
 
+Copyright 2022, BrightAI IP B.V., The Netherlands
 Copyright 2020, The Regents of the University of California.
 All rights reserved.
 
@@ -147,7 +148,8 @@ class TB(object):
         self.dut.asyncReset.value = 0
         await RisingEdge(self.dut.axiClk)
         await RisingEdge(self.dut.axiClk)
-
+        self.log.info("Out of reset")
+        
     async def tapit(self):
         pkts_sent = 0
         pkts_rcvd = 0
@@ -238,9 +240,13 @@ async def run_test(dut, payload_lengths=None, payload_data=None, header_lengths=
     #tb.log.info("started uart_thread")
     #await uart_thread
 
-    t1 = cocotb.start_soon(tb.tapit())
-    tb.log.info("started t1")
-    await t1
+    #t1 = cocotb.start_soon(tb.tapit())
+    #tb.log.info("started t1")
+    #await t1
+
+    while True:
+        await RisingEdge(dut.packetClk)
+
 
     while False:
         tb.log.info("Waiting for packets on TAP")
