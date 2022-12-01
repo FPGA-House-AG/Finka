@@ -1,4 +1,4 @@
-DEBUG?=yes
+DEBUG?=no
 TRACE?=no
 PRINT_PERF?=no
 TRACE_START=0
@@ -22,18 +22,19 @@ endif
 ADDCFLAGS += -CFLAGS -DTRACE_START=${TRACE_START}
 
 # terminal one:
-# /opt/openocd-riscv/bin/openocd -c "log_output openocd.log" -c "set MURAX_CPU0_YAML ../../../../cpu0.yaml" -f "interface/jtag_tcp.cfg" -f "finka.cfg"
+# /opt/openocd-vexriscv/bin/openocd -c "log_output openocd.log" -c "set MURAX_CPU0_YAML ../../../../cpu0.yaml" -f "interface/jtag_tcp.cfg" -f "finka.cfg"
 
 all: clean compile
 
 run: compile
-	#gdb --args ./obj_dir/VFinka
-	./obj_dir/VFinka
+	#gdb --args ./obj_dir/VFinka -ex run
+	obj_dir/VFinka
 
-verilate: ../../../Finka.v
+verilate: ../../../build/rtl/Finka.v
 	rm -f Finka.v*.bin
-	cp ../../../Finka.v*.bin . | true
-	verilator -I../../.. -cc  ../../../Finka.v -CFLAGS -std=c++11  ${ADDCFLAGS} --gdbbt ${VERILATOR_ARGS} -Wno-WIDTH -Wno-UNOPTFLAT --x-assign unique --exe main.cpp
+	cp ../../../build/rtl/Finka.v*ram*.bin . | true
+	#verilator -I../../.. -cc $^ -CFLAGS -std=c++11  ${ADDCFLAGS} --gdbbt ${VERILATOR_ARGS} -Wno-WIDTH -Wno-UNOPTFLAT --x-assign unique --exe main.cpp
+	verilator -cc $^ -CFLAGS -std=c++11  ${ADDCFLAGS} --gdbbt ${VERILATOR_ARGS} -Wno-WIDTH -Wno-UNOPTFLAT --x-assign unique --exe main.cpp
  	
 compile: verilate
 	make  -j  -C obj_dir/ -f VFinka.mk VFinka

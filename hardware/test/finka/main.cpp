@@ -6,13 +6,14 @@
 #include "../../../../VexRiscv.pinned/src/test/cpp/common/framework.h"
 #include "../../../../VexRiscv.pinned/src/test/cpp/common/jtag.h"
 #include "../../../../VexRiscv.pinned/src/test/cpp/common/uart.h"
+#include "tap.h"
 
 class FinkaWorkspace : public Workspace<VFinka>{
 public:
 	FinkaWorkspace() : Workspace("Finka"){
 		int axiPeriod = 1.0e12 / 250.0e6;
 		ClockDomain *axiClk = new ClockDomain(&top->axiClk, NULL, axiPeriod, 300000);
-		int packetPeriod = 1.0e12 / 322.0e6;
+		int packetPeriod = 1.0e12 / 3.0e6;
 		ClockDomain *packetClk = new ClockDomain(&top->packetClk, NULL, packetPeriod, 300000);
 
 		AsyncReset *asyncReset = new AsyncReset(&top->asyncReset, 50000);
@@ -20,11 +21,15 @@ public:
 		UartRx *uartRx = new UartRx(&top->uart_txd, 1.0e12 / 115200);
 		UartTx *uartTx = new UartTx(&top->uart_rxd, 1.0e12 / 115200);
 
+		TapTx *tapTx = new TapTx(top->framerxs_tdata, &top->framerxs_tkeep, &top->framerxs_tuser, &top->framerxs_tlast, &top->framerxs_tvalid, &top->framerxs_tready, 1.0e12 / 115200);
+
+
 		timeProcesses.push_back(axiClk);
 		timeProcesses.push_back(packetClk);
 		timeProcesses.push_back(asyncReset);
 		timeProcesses.push_back(uartRx);
 		timeProcesses.push_back(uartTx);
+		timeProcesses.push_back(tapTx);
 
 		Jtag *jtag = new Jtag(&top->jtag_tms, &top->jtag_tdi, &top->jtag_tdo, &top->jtag_tck, axiPeriod * 4);
 		timeProcesses.push_back(jtag);
