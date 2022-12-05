@@ -70,6 +70,8 @@ else ifeq ($(SIM), verilator)
 	endif
 endif
 
+# @TODO allow ALL without sudo to run tunctl
+CONFIG:=$(shell sudo tunctl -d tap0)
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
