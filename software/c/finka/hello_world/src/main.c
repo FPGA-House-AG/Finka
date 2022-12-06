@@ -198,7 +198,7 @@ void main() {
     const int nloops = 20000;
 	// @TODO causes UART FRAMING ERRORS w/ picolibc
     timer_init(TIMER_A);
-			println("Hello world! I am Finka again.");
+	println("Hello world! I am Finka again.");
 
     while(1){
     	for(unsigned int i=0;i<nleds-1;i++){

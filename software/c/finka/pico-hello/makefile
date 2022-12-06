@@ -25,7 +25,7 @@ LIBS =
 LIBSINC = -L$(OBJDIR)
 LDSCRIPT = ./src/linker.ld
 
-OPENOCD = /opt/openocd-riscv/bin/openocd
+OPENOCD = /opt/openocd-vexriscv/bin/openocd
 
 CROSS_COMPILE = riscv32-unknown-elf-
 

@@ -6,7 +6,8 @@ DEBUG=no
 BENCH=no
 MULDIV=no
 
-SRCS = 	$(wildcard src/*.c) \
+SRCS = 	$(wildcard ../hal/*.c) \
+		$(wildcard src/*.c) \
 		$(wildcard src/*.cpp)  \
 		$(wildcard src/*.S)
 
@@ -17,7 +18,7 @@ LIBS =
 LIBSINC = -L$(OBJDIR)
 LDSCRIPT = ./src/linker.ld
 
-OPENOCD = /opt/openocd-riscv/bin/openocd
+OPENOCD = /opt/openocd-vexriscv/bin/openocd
 
 #include ../../../resources/gcc.mk
 # Set it to yes if you are using the sifive precompiled GCC pack
