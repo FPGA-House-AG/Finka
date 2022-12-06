@@ -79,12 +79,12 @@ public:
 	queue<packet> inputsQueue;
 	mutex inputsMutex;
 
-    //VL_IN8(framerxs_tvalid,0,0);
-    //VL_OUT8(framerxs_tready,0,0);
-    //VL_IN8(framerxs_tlast,0,0);
-    //VL_IN8(framerxs_tuser,0,0);
-    //VL_INW(framerxs_tdata,511,0,16);
-    //VL_IN64(framerxs_tkeep,63,0);
+    //VL_IN8(s_axis_rx_tvalid,0,0);
+    //VL_OUT8(s_axis_rx_tready,0,0);
+    //VL_IN8(s_axis_rx_tlast,0,0);
+    //VL_IN8(s_axis_rx_tuser,0,0);
+    //VL_INW(s_axis_rx_tdata,511,0,16);
+    //VL_IN64(s_axis_rx_tkeep,63,0);
 
 	//tdata is a pointer to an array of 16 words
 	TapTx(WData *tdata, QData *tkeep, CData *tuser, CData *tlast, CData *tvalid, CData *tready, uint32_t uartTimeRate) {

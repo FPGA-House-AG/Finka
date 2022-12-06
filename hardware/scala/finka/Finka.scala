@@ -239,8 +239,8 @@ class Finka(val config: FinkaConfig) extends Component{
     val pcieAxi4Slave = slave(Axi4(pcieAxi4Config))
     
     // in packetClk clock domain, Ethernet/encrypted side, AXIS Corundum TDATA/TKEEP/TUSER
-    val frametxm = master Stream new Fragment(CorundumFrame(corundumDataWidth))
-    val framerxs = slave Stream new Fragment(CorundumFrame(corundumDataWidth))
+    val m_axis_tx = master Stream new Fragment(CorundumFrame(corundumDataWidth))
+    val s_axis_rx = slave Stream new Fragment(CorundumFrame(corundumDataWidth))
 
     // in packetClk clock domain, PCIe/plaintext side AXIS Corundum TDATA/TKEEP/TUSER
     //val frametxs = slave Stream new Fragment(CorundumFrame(corundumDataWidth))
@@ -529,8 +529,8 @@ class Finka(val config: FinkaConfig) extends Component{
     packetWriter.io.ctrlbus << packetTxAxi4SharedBus.toAxi4()
     packetReader.io.ctrlbus << packetRxAxi4SharedBus.toAxi4()
   }
-  io.frametxm << packet.packetWriter.io.output
-  io.framerxs >> packet.dropOnFull.io.sink
+  io.m_axis_tx << packet.packetWriter.io.output
+  io.s_axis_rx >> packet.dropOnFull.io.sink
 
   // bring axi.packetTxAxi4SharedBus into packet clock domain
   // and from Shared to Full bus because BusControllerFactory does not support Axi4Shared?
@@ -673,7 +673,7 @@ object FinkaSim {
       val uartBaudRate =     115200
       val uartBaudPeriod =  (1e12 / uartBaudRate).toLong
 
-      dut.io.framerxs.valid #= false
+      dut.io.s_axis_rx.valid #= false
 
       val axiClockDomain = ClockDomain(dut.io.axiClk, dut.io.asyncReset)
       axiClockDomain.forkStimulus(mainClkPeriod)
@@ -701,9 +701,9 @@ object FinkaSim {
 
       dut.io.coreInterrupt #= false
 
-      dut.io.frametxm.ready #= false
-      dut.io.framerxs.valid #= false
-      dut.io.framerxs.payload.tuser.assignBigInt(0)
+      dut.io.m_axis_tx.ready #= false
+      dut.io.s_axis_rx.valid #= false
+      dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
 
       var commits_seen = 0
       // run 0.1 second after done
@@ -716,35 +716,35 @@ object FinkaSim {
 
 if (false) {
       // push one word in stream
-      dut.io.framerxs.payload.tdata.assignBigInt(0x0011223344556677L)
-      dut.io.framerxs.payload.tkeep.assignBigInt(0x00FF)
-      dut.io.framerxs.payload.tuser.assignBigInt(0)
-      dut.io.framerxs.payload.last #= false
-      dut.io.framerxs.valid #= true
-      dut.packetClockDomain.waitSamplingWhere(dut.io.framerxs.ready.toBoolean)
-      dut.io.framerxs.payload.last #= false
-      dut.io.framerxs.valid #= true
-      dut.packetClockDomain.waitSamplingWhere(dut.io.framerxs.ready.toBoolean)
-      dut.io.framerxs.payload.last #= true
-      dut.io.framerxs.valid #= true
-      dut.packetClockDomain.waitSamplingWhere(dut.io.framerxs.ready.toBoolean)
-      dut.io.framerxs.valid #= false
+      dut.io.s_axis_rx.payload.tdata.assignBigInt(0x0011223344556677L)
+      dut.io.s_axis_rx.payload.tkeep.assignBigInt(0x00FF)
+      dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
+      dut.io.s_axis_rx.payload.last #= false
+      dut.io.s_axis_rx.valid #= true
+      dut.packetClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+      dut.io.s_axis_rx.payload.last #= false
+      dut.io.s_axis_rx.valid #= true
+      dut.packetClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+      dut.io.s_axis_rx.payload.last #= true
+      dut.io.s_axis_rx.valid #= true
+      dut.packetClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+      dut.io.s_axis_rx.valid #= false
 
       // push one word in stream
-      dut.io.framerxs.payload.tdata.assignBigInt(0x0011223344556677L)
-      dut.io.framerxs.payload.tkeep.assignBigInt(0x00FF)
-      dut.io.framerxs.payload.tuser.assignBigInt(0)
-      dut.io.framerxs.payload.last #= true
-      dut.io.framerxs.valid #= true
-      dut.packetClockDomain.waitSamplingWhere(dut.io.framerxs.ready.toBoolean)
-      dut.io.framerxs.valid #= false
+      dut.io.s_axis_rx.payload.tdata.assignBigInt(0x0011223344556677L)
+      dut.io.s_axis_rx.payload.tkeep.assignBigInt(0x00FF)
+      dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
+      dut.io.s_axis_rx.payload.last #= true
+      dut.io.s_axis_rx.valid #= true
+      dut.packetClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+      dut.io.s_axis_rx.valid #= false
 }
 
-dut.io.frametxm.ready #= true
+dut.io.m_axis_tx.ready #= true
 
       //val readyThread = fork {
       //      dut.packetClockDomain.waitRisingEdge()
-      //      dut.io.frametxm.ready #= (Random.nextInt(8) > 2)
+      //      dut.io.m_axis_tx.ready #= (Random.nextInt(8) > 2)
       //}
 
       // packet generator
@@ -811,20 +811,20 @@ dut.io.frametxm.ready #= true
               }
             }
 
-            dut.io.framerxs.valid #= valid0
-            dut.io.framerxs.payload.tdata #= plaintext(word_index)
-            dut.io.framerxs.last #= last0
-            dut.io.framerxs.payload.tkeep #= tkeep0
+            dut.io.s_axis_rx.valid #= valid0
+            dut.io.s_axis_rx.payload.tdata #= plaintext(word_index)
+            dut.io.s_axis_rx.last #= last0
+            dut.io.s_axis_rx.payload.tkeep #= tkeep0
 
             //dut.io.source.ready #= (Random.nextInt(8) > 1)
 
             // Wait a rising edge on the clock
             dut.packetClockDomain.waitRisingEdge()
 
-            dut.io.framerxs.valid #= false
+            dut.io.s_axis_rx.valid #= false
 
 
-            if (dut.io.framerxs.ready.toBoolean & dut.io.framerxs.valid.toBoolean) {
+            if (dut.io.s_axis_rx.ready.toBoolean & dut.io.s_axis_rx.valid.toBoolean) {
               remaining -= tkeep_len
               word_index += 1
             }
@@ -856,26 +856,26 @@ dut.io.frametxm.ready #= true
           printf("REG6 : %X\n", dut.io.update6.toLong)
         }
 
-        if (dut.io.framerxs.valid.toBoolean & dut.io.framerxs.ready.toBoolean) {
-          printf("RXS VALID == %X\n", dut.io.framerxs.valid.toBoolean.toInt)
-          printf("RXS TLAST == %X\n", dut.io.framerxs.last.toBoolean.toInt)
+        if (dut.io.s_axis_rx.valid.toBoolean & dut.io.s_axis_rx.ready.toBoolean) {
+          printf("RXS VALID == %X\n", dut.io.s_axis_rx.valid.toBoolean.toInt)
+          printf("RXS TLAST == %X\n", dut.io.s_axis_rx.last.toBoolean.toInt)
           // 4 bits per printf hex nibble
           val dw = dut.config.corundumDataWidth / 4
           // one keep bit per byte, 4 bits per printf hex nibble
           val kw = dut.config.corundumDataWidth / 8 / 4
-          printf(s"RXS TDATA == 0x%0${dw}X\n", dut.io.framerxs.payload.tdata.toBigInt)
-          printf(s"RXS TKEEP == 0x%0${kw}X\n", dut.io.framerxs.payload.tkeep.toBigInt)
+          printf(s"RXS TDATA == 0x%0${dw}X\n", dut.io.s_axis_rx.payload.tdata.toBigInt)
+          printf(s"RXS TKEEP == 0x%0${kw}X\n", dut.io.s_axis_rx.payload.tkeep.toBigInt)
         }
 
-        if (dut.io.frametxm.valid.toBoolean & dut.io.frametxm.ready.toBoolean) {
-          printf("TXM VALID == %X\n", dut.io.frametxm.valid.toBoolean.toInt)
-          printf("TXM TLAST == %X\n", dut.io.frametxm.last.toBoolean.toInt)
+        if (dut.io.m_axis_tx.valid.toBoolean & dut.io.m_axis_tx.ready.toBoolean) {
+          printf("TXM VALID == %X\n", dut.io.m_axis_tx.valid.toBoolean.toInt)
+          printf("TXM TLAST == %X\n", dut.io.m_axis_tx.last.toBoolean.toInt)
           // 4 bits per printf hex nibble
           val dw = dut.config.corundumDataWidth / 4
           // one keep bit per byte, 4 bits per printf hex nibble
           val kw = dut.config.corundumDataWidth / 8 / 4
-          printf(s"TXM TDATA == 0x%0${dw}X\n", dut.io.frametxm.payload.tdata.toBigInt)
-          printf(s"TXM TKEEP == 0x%0${kw}X\n", dut.io.frametxm.payload.tkeep.toBigInt)
+          printf(s"TXM TDATA == 0x%0${dw}X\n", dut.io.m_axis_tx.payload.tdata.toBigInt)
+          printf(s"TXM TKEEP == 0x%0${kw}X\n", dut.io.m_axis_tx.payload.tkeep.toBigInt)
         }
 
         packetClockDomain.waitRisingEdge()

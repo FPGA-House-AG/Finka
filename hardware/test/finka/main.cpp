@@ -21,7 +21,7 @@ public:
 		UartRx *uartRx = new UartRx(&top->uart_txd, 1.0e12 / 115200);
 		UartTx *uartTx = new UartTx(&top->uart_rxd, 1.0e12 / 115200);
 
-		TapTx *tapTx = new TapTx(top->framerxs_tdata, &top->framerxs_tkeep, &top->framerxs_tuser, &top->framerxs_tlast, &top->framerxs_tvalid, &top->framerxs_tready, 1.0e12 / 115200);
+		TapTx *tapTx = new TapTx(top->s_axis_rx_tdata, &top->s_axis_rx_tkeep, &top->s_axis_rx_tuser, &top->s_axis_rx_tlast, &top->s_axis_rx_tvalid, &top->s_axis_rx_tready, 1.0e12 / 115200);
 
 
 		timeProcesses.push_back(axiClk);
@@ -65,7 +65,7 @@ int main(int argc, char **argv, char **env) {
 	printf("BOOT\n");
 	timespec startedAt = timer_start();
 
-	FinkaWorkspace().run(1e9);
+	FinkaWorkspace().run(1e7);
 
 	uint64_t duration = timer_end(startedAt);
 	cout << endl << "****************************************************************" << endl;
