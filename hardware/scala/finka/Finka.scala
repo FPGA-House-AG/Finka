@@ -606,7 +606,7 @@ object Finka {
 
 object FinkaWithMemoryInit{
   def main(args: Array[String]) {
-    val config = Config.spinal //SpinalConfig()
+    val config = Config.spinal
     val verilog = config.generateVerilog({
       val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex")
       val toplevel = new Finka(socConfig)
@@ -619,8 +619,14 @@ object FinkaWithMemoryInit{
 
 object FinkaWireguard{
   def main(args: Array[String]) {
-    val config = Config.spinal //SpinalConfig()
-    val verilog = config.generateVerilog({
+    val config = Config.spinal.copy(targetDirectory = "build/rtl/wireguard")
+    val vhdlReport = config.generateVhdl({
+      val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "../wg_lwip/build-riscv/echop.hex")
+      val toplevel = new Finka(socConfig)
+      // return this
+      toplevel
+    })
+    val verilogReport = config.generateVerilog({
       val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "../wg_lwip/build-riscv/echop.hex")
       val toplevel = new Finka(socConfig)
       // return this
