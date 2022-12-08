@@ -29,7 +29,8 @@ rtl:
 	set -e
 	# make -j8 -C software/c/finka/hello_world clean
 	# make -j8 -C software/c/finka/hello_world clean all DEBUG=yes
-	sbt "runMain finka.FinkaWithMemoryInit; runMain finka.LookupMemAxi4Verilog; runMain finka.FinkaWireguard"
+	# runMain finka.LookupMemAxi4Verilog;
+	sbt "runMain finka.FinkaWithMemoryInit; runMain finka.FinkaWireguard"
 
 wg:
 	set -e

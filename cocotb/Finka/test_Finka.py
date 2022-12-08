@@ -122,12 +122,14 @@ class TB(object):
         # connect TB source to DUT sink, and vice versa
         # byte_lanes = 16 is a workaround for bug https://github.com/alexforencich/cocotbext-axi/issues/46
         # in case no TKEEP[] signals are used
-        self.source = AxiStreamSource(AxiStreamBus.from_prefix(dut, "s_axis_rx"  ), dut.packetClk, dut.asyncReset) #, byte_lanes = 16)
-        self.sink =   AxiStreamSink  (AxiStreamBus.from_prefix(dut, "m_axis_tx"  ), dut.packetClk, dut.asyncReset) #, byte_lanes = 16)
+
+
+        #self.source = AxiStreamSource(AxiStreamBus.from_prefix(dut, "s_axis_rx"  ), dut.packetClk, dut.asyncReset) #, byte_lanes = 16)
+        #self.sink =   AxiStreamSink  (AxiStreamBus.from_prefix(dut, "m_axis_tx"  ), dut.packetClk, dut.asyncReset) #, byte_lanes = 16)
 
         # TB source driving DUT UART rx pin
-        self.uart_source = UartSource(dut.uart_rxd, baud=115200)
-        self.uart_sink = UartSink(dut.uart_txd, baud=115200)
+        self.uart_source = UartSource(dut.uart_rxd, baud=115200 * 8)
+        self.uart_sink = UartSink(dut.uart_txd, baud=115200 * 8)
 
         #tap, tapname = create_tap()
         #self.tap = tap

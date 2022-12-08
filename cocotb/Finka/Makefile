@@ -27,9 +27,11 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of The Regents of the University of California.
 
-TOPLEVEL_LANG = verilog
+TOPLEVEL_LANG ?= vhdl
 
 # verilator does not seem to simulate Finka yet, I get no UART output in CocoTB
+
+# choose prefered simulator based on TOPLEVEL_LANG later
 SIM ?= icarus
 WAVES ?= 0
 
@@ -39,8 +41,15 @@ COCOTB_HDL_TIMEPRECISION = 1ps
 DUT      = Finka
 TOPLEVEL = $(DUT)
 MODULE   = test_$(DUT)
+DUTDIR   = ../../build/rtl/wireguard
 #VERILOG_SOURCES += ../../rtl/$(DUT).v
-VERILOG_SOURCES += ../../$(DUT).v
+ifeq ($(TOPLEVEL_LANG), verilog)
+VERILOG_SOURCES += $(DUTDIR)/$(DUT).v
+else ifeq ($(TOPLEVEL_LANG), vhdl)
+VHDL_SOURCES +=    $(DUTDIR)/$(DUT).vhd
+
+TOPLEVEL = $(shell echo $(DUT) | tr A-Z a-z)
+endif
 
 # generate soft-links to the RAM binaries
 IGNORE:=$(shell find ../../Finka.v*ram*.bin -type f | xargs -L1 echo ln -snf)
@@ -49,26 +58,50 @@ IGNORE:=$(shell find ../../Finka.v*ram*.bin -type f | xargs -L1 echo ln -snf)
 export PARAM_DATA_WIDTH ?= 32
 export PARAM_KEEP_WIDTH ?= $(shell expr $(PARAM_DATA_WIDTH) / 8 )
 
-ifeq ($(SIM), icarus)
-	PLUSARGS += -fst
+ifeq ($(TOPLEVEL_LANG),verilog)
+	ifeq ($(SIM), icarus)
+		PLUSARGS += -fst
 
-	#COMPILE_ARGS += -P $(TOPLEVEL).DATA_WIDTH=$(PARAM_DATA_WIDTH)
-	#COMPILE_ARGS += -P $(TOPLEVEL).KEEP_WIDTH=$(PARAM_KEEP_WIDTH)
+		#COMPILE_ARGS += -P $(TOPLEVEL).DATA_WIDTH=$(PARAM_DATA_WIDTH)
+		#COMPILE_ARGS += -P $(TOPLEVEL).KEEP_WIDTH=$(PARAM_KEEP_WIDTH)
 
-	ifeq ($(WAVES), 1)
-		VERILOG_SOURCES += iverilog_dump.v
-		COMPILE_ARGS += -s iverilog_dump
+		ifeq ($(WAVES), 1)
+			VERILOG_SOURCES += iverilog_dump.v
+			COMPILE_ARGS += -s iverilog_dump
+		endif
+	else ifeq ($(SIM), verilator)
+		COMPILE_ARGS += -Wno-SELRANGE -Wno-WIDTH -Wno-MULTIDRIVEN
+
+		#COMPILE_ARGS += -GDATA_WIDTH=$(PARAM_DATA_WIDTH)
+		#COMPILE_ARGS += -GKEEP_WIDTH=$(PARAM_KEEP_WIDTH)
+
+		ifeq ($(WAVES), 1)
+			COMPILE_ARGS += --trace-fst
+		endif
 	endif
-else ifeq ($(SIM), verilator)
-	COMPILE_ARGS += -Wno-SELRANGE -Wno-WIDTH -Wno-MULTIDRIVEN
+else ifeq ($(TOPLEVEL_LANG),vhdl)
+    # ifneq ($(filter $(SIM),ghdl questa modelsim riviera activehdl),)
+    #     # ghdl, questa, and aldec all use SIM_ARGS with '-g' for setting generics
+    #     SIM_ARGS += -gDATA_WIDTH=$(DATA_WIDTH) -gA_ROWS=$(A_ROWS) -gB_COLUMNS=$(B_COLUMNS) -gA_COLUMNS_B_ROWS=$(A_COLUMNS_B_ROWS)
+    # else ifneq ($(filter $(SIM),ius xcelium),)
+    #     SIM_ARGS += -generic "matrix_multiplier:DATA_WIDTH=>$(DATA_WIDTH)" -generic "matrix_multiplier:A_ROWS=>$(A_ROWS)" -generic "matrix_multiplier:B_COLUMNS=>$(B_COLUMNS)" -generic "matrix_multiplier:A_COLUMNS_B_ROWS=>$(A_COLUMNS_B_ROWS)"
+    # endif
 
-	#COMPILE_ARGS += -GDATA_WIDTH=$(PARAM_DATA_WIDTH)
-	#COMPILE_ARGS += -GKEEP_WIDTH=$(PARAM_KEEP_WIDTH)
+    ifeq ($(SIM),ghdl)
+        EXTRA_ARGS += --std=08
+        SIM_ARGS += --backtrace-severity=warning --assert-level=none --ieee-asserts=disable
 
-	ifeq ($(WAVES), 1)
-		COMPILE_ARGS += --trace-fst
-	endif
+		ifeq ($(WAVES), 1)
+			SIM_ARGS += --wave=wave.ghw 
+		endif
+
+    else ifneq ($(filter $(SIM),questa modelsim riviera activehdl),)
+        COMPILE_ARGS += -2008
+    endif
+else
+    $(error A valid value (verilog or vhdl) was not provided for TOPLEVEL_LANG=$(TOPLEVEL_LANG))
 endif
+
 
 # @TODO allow ALL without sudo to run tunctl
 CONFIG:=$(shell sudo tunctl -d tap0)
