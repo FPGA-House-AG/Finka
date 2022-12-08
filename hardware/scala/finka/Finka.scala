@@ -207,7 +207,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val axiRst     = in Bool()
 
     val packetClk   = in Bool()
-    //val packetRst   = in Bool()
+    val packetRst   = in Bool()
 
     // Main components IO
     val jtag       = slave(Jtag())
@@ -270,27 +270,30 @@ class Finka(val config: FinkaConfig) extends Component{
     //}
 
     //Create all reset used later in the design
-    val systemReset  = RegNext(systemResetUnbuffered) //simPublic()
-    val axiReset     = RegNext(systemResetUnbuffered) //simPublic()
-    val packetReset  = RegNext(systemResetUnbuffered) //simPublic()
+    //val systemReset  = RegNext(io.axiRst) //simPublic()
+    val axiReset     = RegNext(io.axiRst) //simPublic()
+    val packetReset  = RegNext(io.packetRst) //simPublic()
   }
 
   val axiClockDomain = ClockDomain(
     clock = io.axiClk,
     reset = resetCtrl.axiReset,
-    frequency = FixedFrequency(axiFrequency) //The frequency information is used by the SDRAM controller
+    frequency = FixedFrequency(axiFrequency), //The frequency information is used by the SDRAM controller
+    config = Config.syncConfig
   )
 
+  // debug CD is reset by the external I/O reset sync to axiClk
   val debugClockDomain = ClockDomain(
     clock = io.axiClk,
-    reset = resetCtrl.systemReset,
+    reset = io.axiRst,
     frequency = FixedFrequency(axiFrequency)
   )
 
   val packetClockDomain = ClockDomain(
     clock = io.packetClk,
-    reset = resetCtrl.packetReset
-    //reset = BufferCC(resetCtrl.packetReset)
+    reset = io.packetRst,
+    config = Config.syncConfig
+    //reset = resetCtrl.packetReset
   )
 
   val busconfig = Axi4Config(32, 32, 2, useQos = false, useRegion = false)
@@ -432,6 +435,7 @@ class Finka(val config: FinkaConfig) extends Component{
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
       crossbar.readRsp               <<  ctrl.readRsp
+      // mnemonic: / cuts the ready path, - stages valid and data
     })
 
     // CPU data bus master
@@ -445,9 +449,9 @@ class Finka(val config: FinkaConfig) extends Component{
     // PCIe bus master
     axiCrossbar.addPipelining(pcieAxi4SharedBus)((pcie, crossbar) => {
       pcie.sharedCmd             >>  crossbar.sharedCmd
-      pcie.writeData             >>  crossbar.writeData
+      pcie.writeData             >/->  crossbar.writeData
       pcie.writeRsp              <<  crossbar.writeRsp
-      pcie.readRsp               <<  crossbar.readRsp
+      pcie.readRsp               <-/<  crossbar.readRsp
     })
 
     axiCrossbar.build()
@@ -573,22 +577,6 @@ class Finka(val config: FinkaConfig) extends Component{
   addPrePopTask(() => CorundumFrame.renameAxiIO(io))
 }
 
-// https://gitter.im/SpinalHDL/SpinalHDL?at=5c2297c28d31aa78b1f8c969
-// but now in lib
-object XilinxPatch {
-  def apply[T <: Component](c : T) : T = {
-    //Patch things
-    c.getGroupedIO(true).foreach{
-      //case axi : AxiLite4 => AxiLite4SpecRenamer(axi)
-      case axi : Axi4 => Axi4SpecRenamer(axi)
-      //case axi : Fragment(CorundumFrame) => CorundumAxi4SpecRenamer(axi)
-      case _ =>
-    }
-    //Builder pattern return the input argument
-    c
-  }
-}
-
 object Finka {
   def main(args: Array[String]) {
     val verilog = Config.spinal.generateVerilog({
@@ -641,6 +629,7 @@ import spinal.core.sim._
 import scala.collection.mutable.ListBuffer
 
 object FinkaSim {
+
   def main(args: Array[String]): Unit = {
     val simSlowDown = false
     val socConfig = FinkaConfig.default.copy(
@@ -653,8 +642,8 @@ object FinkaSim {
     // synchronous resets, see Config.scala
     .withConfig(Config.spinal)
     .allOptimisation
-    //.withGhdl//.addSimulatorFlag("--ieee-asserts=disable-at-0")
-    .withVerilator.addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
+    .withGhdl//.addSimulatorFlag("--ieee-asserts=disable")
+    //.withVerilator.addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
 
     val waveform = false
     if (waveform) simConfig.withFstWave//.withWaveDepth(10) // does not work with Verilator, use SimTimeout()
@@ -663,7 +652,7 @@ object FinkaSim {
       val dut = new Finka(socConfig)
 
       // expose internal signals
-      dut.resetCtrl.systemReset.simPublic()
+      //dut.resetCtrl.systemReset.simPublic()
       dut.resetCtrl.axiReset.simPublic()
       dut.resetCtrl.packetReset.simPublic()
 
@@ -687,14 +676,13 @@ object FinkaSim {
       // stop after 1M clocks to prevent disk wearout
       if (waveform) SimTimeout(100000 * mainClkPeriod)
 
-      val packetClockDomain = ClockDomain(dut.io.packetClk)
+      val packetClockDomain = ClockDomain(dut.io.packetClk, dut.io.packetRst)
       packetClockDomain.forkStimulus(packetClkPeriod)
 
       val tcpJtag = JtagTcp(
         jtag = dut.io.jtag,
         jtagClkPeriod = jtagClkPeriod
       )
-
       val uartTx = UartDecoder(
         uartPin = dut.io.uart.txd,
         baudPeriod = uartBaudPeriod
@@ -717,8 +705,6 @@ object FinkaSim {
 
       dut.packetClockDomain.waitSampling(1)
       dut.axiClockDomain.waitSampling(1)
-      dut.packetClockDomain.waitSamplingWhere(dut.resetCtrl.packetReset.toBoolean == true)
-      dut.packetClockDomain.waitSamplingWhere(dut.resetCtrl.packetReset.toBoolean == false)
 
 if (false) {
       // push one word in stream
@@ -752,6 +738,13 @@ dut.io.m_axis_tx.ready #= true
       //      dut.packetClockDomain.waitRisingEdge()
       //      dut.io.m_axis_tx.ready #= (Random.nextInt(8) > 2)
       //}
+
+      val monitorResetsThread = fork {
+        if (dut.resetCtrl.axiReset.toBoolean == true) {
+          printf("\nAXI RESET\n");
+          dut.axiClockDomain.waitRisingEdge()
+        }
+      }
 
       // packet generator
       val sendThread = fork {
@@ -793,7 +786,7 @@ dut.io.m_axis_tx.ready #= true
 
         var sent = 0
         while (sent < 1) {
-          var packet_length = 3 * 64 - 4 // bytes
+          var packet_length = 3 * 64 - 4 // = 188 bytes
           var remaining = packet_length
 
           var word_index = 0
@@ -863,25 +856,25 @@ dut.io.m_axis_tx.ready #= true
         }
 
         if (dut.io.s_axis_rx.valid.toBoolean & dut.io.s_axis_rx.ready.toBoolean) {
-          printf("RXS VALID == %X\n", dut.io.s_axis_rx.valid.toBoolean.toInt)
-          printf("RXS TLAST == %X\n", dut.io.s_axis_rx.last.toBoolean.toInt)
+          printf("S_AXIS_RX VALID == %X\n", dut.io.s_axis_rx.valid.toBoolean.toInt)
+          printf("S_AXIS_RX TLAST == %X\n", dut.io.s_axis_rx.last.toBoolean.toInt)
           // 4 bits per printf hex nibble
           val dw = dut.config.corundumDataWidth / 4
           // one keep bit per byte, 4 bits per printf hex nibble
           val kw = dut.config.corundumDataWidth / 8 / 4
-          printf(s"RXS TDATA == 0x%0${dw}X\n", dut.io.s_axis_rx.payload.tdata.toBigInt)
-          printf(s"RXS TKEEP == 0x%0${kw}X\n", dut.io.s_axis_rx.payload.tkeep.toBigInt)
+          printf(s"S_AXIS_RX TDATA == 0x%0${dw}X\n", dut.io.s_axis_rx.payload.tdata.toBigInt)
+          printf(s"S_AXIS_RX TKEEP == 0x%0${kw}X\n", dut.io.s_axis_rx.payload.tkeep.toBigInt)
         }
 
         if (dut.io.m_axis_tx.valid.toBoolean & dut.io.m_axis_tx.ready.toBoolean) {
-          printf("TXM VALID == %X\n", dut.io.m_axis_tx.valid.toBoolean.toInt)
-          printf("TXM TLAST == %X\n", dut.io.m_axis_tx.last.toBoolean.toInt)
+          printf("M_AXIS_TX VALID == %X\n", dut.io.m_axis_tx.valid.toBoolean.toInt)
+          printf("M_AXIS_TX TLAST == %X\n", dut.io.m_axis_tx.last.toBoolean.toInt)
           // 4 bits per printf hex nibble
           val dw = dut.config.corundumDataWidth / 4
           // one keep bit per byte, 4 bits per printf hex nibble
           val kw = dut.config.corundumDataWidth / 8 / 4
-          printf(s"TXM TDATA == 0x%0${dw}X\n", dut.io.m_axis_tx.payload.tdata.toBigInt)
-          printf(s"TXM TKEEP == 0x%0${kw}X\n", dut.io.m_axis_tx.payload.tkeep.toBigInt)
+          printf(s"M_AXIS_TX TDATA == 0x%0${dw}X\n", dut.io.m_axis_tx.payload.tdata.toBigInt)
+          printf(s"M_AXIS_TX TKEEP == 0x%0${kw}X\n", dut.io.m_axis_tx.payload.tkeep.toBigInt)
         }
 
         packetClockDomain.waitRisingEdge()
