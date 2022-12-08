@@ -13,7 +13,7 @@ public:
 	FinkaWorkspace() : Workspace("Finka"){
 		int axiPeriod = 1.0e12 / 250.0e6;
 		ClockDomain *axiClk = new ClockDomain(&top->axiClk, NULL, axiPeriod, 300000);
-		int packetPeriod = 1.0e12 / 3.0e6;
+		int packetPeriod = 1.0e12 / 322.0e6;
 		ClockDomain *packetClk = new ClockDomain(&top->packetClk, NULL, packetPeriod, 300000);
 
 		AsyncReset *asyncReset = new AsyncReset(&top->asyncReset, 50000);

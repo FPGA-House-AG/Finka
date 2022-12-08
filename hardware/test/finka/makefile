@@ -32,7 +32,7 @@ run: compile
 
 verilate: ../../../build/rtl/Finka.v
 	rm -f Finka.v*.bin
-	cp ../../../build/rtl/Finka.v*ram*.bin . | true
+	cp -a ../../../build/rtl/Finka.v*ram*.bin . | true
 	#verilator -I../../.. -cc $^ -CFLAGS -std=c++11  ${ADDCFLAGS} --gdbbt ${VERILATOR_ARGS} -Wno-WIDTH -Wno-UNOPTFLAT --x-assign unique --exe main.cpp
 	verilator -cc $^ -CFLAGS -std=c++11  ${ADDCFLAGS} --gdbbt ${VERILATOR_ARGS} -Wno-WIDTH -Wno-UNOPTFLAT --x-assign unique --exe main.cpp
  	

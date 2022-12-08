@@ -10,6 +10,7 @@ vivado*.jou
 vivado*.str
 iverilog_dump.v
 *.fst
+*.fst.hier
 cocotb/**/results.xml
 cocotb/**/sim_build
 # generate Verilog
@@ -17,7 +18,20 @@ cocotb/**/sim_build
 *.sv
 # Python compiled
 *.pyc
+
 # hardware/test
 *.logTrace
 obj_dir/
+
+# Vivado test projects
 vivado-test-*
+
+# RISC-V GCC intermediate files
+software/c/finka/hello_world/crt.s
+software/c/finka/hello_world/main.i
+software/c/finka/hello_world/main.s
+
+# GHDL
+*.o
+cocotb/Finka/finka
+*.ghw
