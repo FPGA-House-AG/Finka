@@ -20,25 +20,11 @@ LDSCRIPT = ./src/linker.ld
 
 OPENOCD = /opt/openocd-vexriscv/bin/openocd
 
-#include ../../../resources/gcc.mk
-# Set it to yes if you are using the sifive precompiled GCC pack
-SIFIVE_GCC_PACK ?= yes
-
-ifeq ($(SIFIVE_GCC_PACK),yes)
-	RISCV_NAME ?= riscv64-unknown-elf
-	#RISCV_PATH ?= /opt/riscv/
-	RISCV_PATH ?= /opt/riscv64-unknown-elf-gcc-20171231-x86_64-linux-centos6
-else
-	RISCV_NAME ?= riscv32-unknown-elf
-	ifeq ($(MULDIV),yes)
-		RISCV_PATH ?= /opt/riscv32im/
-	else
-		RISCV_PATH ?= /opt/riscv32i/
-	endif
-endif
+RISCV_PATH ?= /opt/x-tools/riscv32-unknown-elf
+RISCV_NAME ?= riscv32-unknown-elf
 
 MABI=ilp32
-MARCH := rv32i
+MARCH := rv32i_zicsr_zifencei
 ifeq ($(MULDIV),yes)
 	MARCH := $(MARCH)m
 endif
@@ -49,10 +35,7 @@ endif
 CFLAGS += -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG
 LDFLAGS += -march=$(MARCH)  -mabi=$(MABI)
 
-
-
 #include ../../../resources/subproject.mk
-
 
 ifeq ($(DEBUG),yes)
 	CFLAGS += -g3 -O0
@@ -66,15 +49,7 @@ ifeq ($(BENCH),yes)
 	CFLAGS += -fno-inline
 endif
 
-ifeq ($(SIFIVE_GCC_PACK),yes)
-	RISCV_CLIB=$(RISCV_PATH)/$(RISCV_NAME)/lib/$(MARCH)/$(MABI)/
-else
-	RISCV_CLIB=$(RISCV_PATH)/$(RISCV_NAME)/lib/
-endif
-
-
-
-
+RISCV_CLIB=$(RISCV_PATH)/$(RISCV_NAME)/lib/
 
 RISCV_OBJCOPY = $(RISCV_PATH)/bin/$(RISCV_NAME)-objcopy
 RISCV_OBJDUMP = $(RISCV_PATH)/bin/$(RISCV_NAME)-objdump
