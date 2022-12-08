@@ -201,9 +201,10 @@ class Finka(val config: FinkaConfig) extends Component{
 
   val io = new Bundle{
     // Clocks / reset
-    val asyncReset = in Bool()
+    //val asyncReset = in Bool()
 
     val axiClk     = in Bool()
+    val axiRst     = in Bool()
 
     val packetClk   = in Bool()
     //val packetRst   = in Bool()
@@ -249,9 +250,8 @@ class Finka(val config: FinkaConfig) extends Component{
 
   val resetCtrlClockDomain = ClockDomain(
     clock = io.axiClk,
-    config = ClockDomainConfig(
-      resetKind = BOOT
-    )
+    reset = io.axiRst,
+    config = Config.syncConfig
   )
 
   val resetCtrl = new ClockingArea(resetCtrlClockDomain) {
@@ -265,9 +265,9 @@ class Finka(val config: FinkaConfig) extends Component{
       systemResetCounter := systemResetCounter + 1
       systemResetUnbuffered := True
     }
-    when(BufferCC(io.asyncReset)){
-      systemResetCounter := 0
-    }
+    //when(BufferCC(io.asyncReset)){
+    //  systemResetCounter := 0
+    //}
 
     //Create all reset used later in the design
     val systemReset  = RegNext(systemResetUnbuffered) //simPublic()
@@ -357,7 +357,7 @@ class Finka(val config: FinkaConfig) extends Component{
           plugin.externalInterrupt := BufferCC(io.coreInterrupt)
           plugin.timerInterrupt := timerCtrl.io.interrupt
         }
-        case plugin : DebugPlugin      => debugClockDomain{
+        case plugin : DebugPlugin      => plugin.debugClockDomain{
           resetCtrl.axiReset setWhen(RegNext(plugin.io.resetOut))
           io.jtag <> plugin.io.bus.fromJtag()
         }
@@ -681,7 +681,7 @@ object FinkaSim {
 
       dut.io.s_axis_rx.valid #= false
 
-      val axiClockDomain = ClockDomain(dut.io.axiClk, dut.io.asyncReset)
+      val axiClockDomain = ClockDomain(dut.io.axiClk, dut.io.axiRst)
       axiClockDomain.forkStimulus(mainClkPeriod)
 
       // stop after 1M clocks to prevent disk wearout
