@@ -112,24 +112,28 @@ class TB(object):
         self.log = logging.getLogger("cocotb.tb")
         self.log.setLevel(logging.DEBUG)
 
-        # simulate 250 MHz clock on axiClk
-        cocotb.fork(Clock(dut.axiClk, 4, units="ns").start())
+        # simulate 250 MHz clock on clk
+        cocotb.fork(Clock(dut.clk, 4, units="ns").start())
 
-        # simulate 322 MHz clock on packetClk
-        cocotb.fork(Clock(dut.packetClk, 3, units="ns").start())
-        #cocotb.fork(Clock(dut.packetClk, 3105, units="ps").start())
+        # simulate 322 MHz clock on rx_clk
+        cocotb.fork(Clock(dut.rx_clk, 3, units="ns").start())
+
+        # simulate 322 MHz clock on tx_clk
+        cocotb.fork(Clock(dut.tx_clk, 3, units="ns").start())
+
+        #cocotb.fork(Clock(dut.rx_clk, 3105, units="ps").start())
 
         # connect TB source to DUT sink, and vice versa
         # byte_lanes = 16 is a workaround for bug https://github.com/alexforencich/cocotbext-axi/issues/46
         # in case no TKEEP[] signals are used
 
 
-        #self.source = AxiStreamSource(AxiStreamBus.from_prefix(dut, "s_axis_rx"  ), dut.packetClk, dut.asyncReset) #, byte_lanes = 16)
-        #self.sink =   AxiStreamSink  (AxiStreamBus.from_prefix(dut, "m_axis_tx"  ), dut.packetClk, dut.asyncReset) #, byte_lanes = 16)
+        #self.source = AxiStreamSource(AxiStreamBus.from_prefix(dut, "s_axis_rx"  ), dut.rx_clk, dut.asyncReset) #, byte_lanes = 16)
+        #self.sink =   AxiStreamSink  (AxiStreamBus.from_prefix(dut, "m_axis_tx"  ), dut.rx_clk, dut.asyncReset) #, byte_lanes = 16)
 
         # TB source driving DUT UART rx pin
-        self.uart_source = UartSource(dut.uart_rxd, baud=115200 * 8)
-        self.uart_sink = UartSink(dut.uart_txd, baud=115200 * 8)
+        self.uart_source = UartSource(dut.uart_rxd, baud=115200 * 1)
+        self.uart_sink = UartSink(dut.uart_txd, baud=115200 * 1)
 
         #tap, tapname = create_tap()
         #self.tap = tap
@@ -141,15 +145,23 @@ class TB(object):
             self.source.set_pause_generator(generator())
 
     async def reset(self):
-        self.dut.asyncReset.setimmediatevalue(0)
-        await RisingEdge(self.dut.axiClk)
-        await RisingEdge(self.dut.axiClk)
-        self.dut.asyncReset.value = 1
-        await RisingEdge(self.dut.axiClk)
-        await RisingEdge(self.dut.axiClk)
-        self.dut.asyncReset.value = 0
-        await RisingEdge(self.dut.axiClk)
-        await RisingEdge(self.dut.axiClk)
+        self.dut.rst.setimmediatevalue(0)
+        self.dut.rx_rst.setimmediatevalue(0)
+        self.dut.tx_rst.setimmediatevalue(0)
+        await RisingEdge(self.dut.clk)
+        await RisingEdge(self.dut.clk)
+        self.dut.rst.value = 1
+        self.dut.rx_rst.value = 1
+        self.dut.tx_rst.value = 1
+        await RisingEdge(self.dut.clk)
+        await RisingEdge(self.dut.clk)
+        self.dut.tx_rst.value = 0
+        self.dut.rx_rst.value = 0
+        await RisingEdge(self.dut.clk)
+        await RisingEdge(self.dut.clk)
+        self.dut.rst.value = 0
+        await RisingEdge(self.dut.clk)
+        await RisingEdge(self.dut.clk)
         self.log.info("Out of reset")
         
     async def tapit(self):
@@ -164,7 +176,7 @@ class TB(object):
             except:
                 # No Ethernet frame on TB sink
                 frame_tb2tap = False
-                await RisingEdge(self.dut.packetClk)
+                await RisingEdge(self.dut.rx_clk)
             if (frame_tb2tap == True):
                 # forward Ethernet frame from TB to TAP
                 rx_pkt = bytes(rx_frame)
@@ -181,7 +193,7 @@ class TB(object):
                 packet = os.read(self.tapfd, 16 * 1024)
             except:
                 frame_tap2tb = False
-                await RisingEdge(self.dut.packetClk)
+                await RisingEdge(self.dut.rx_clk)
             if (frame_tap2tb == True):
                 # forward Ethernet frame from TAP to TB
                 tx_pkt = bytearray(packet)
@@ -247,7 +259,7 @@ async def run_test(dut, payload_lengths=None, payload_data=None, header_lengths=
     #await t1
 
     while True:
-        await RisingEdge(dut.packetClk)
+        await RisingEdge(dut.rx_clk)
 
 
     while False:
@@ -277,21 +289,21 @@ async def run_test(dut, payload_lengths=None, payload_data=None, header_lengths=
         os.write(tb.tapfd, padded_pkt)
 
 
-        await RisingEdge(dut.packetClk)
-        await RisingEdge(dut.packetClk)
-        await RisingEdge(dut.packetClk)
-        await RisingEdge(dut.packetClk)
-        await RisingEdge(dut.packetClk)
-        await RisingEdge(dut.packetClk)
-        await RisingEdge(dut.packetClk)
-        await RisingEdge(dut.packetClk)
-        await RisingEdge(dut.packetClk)
+        await RisingEdge(dut.rx_clk)
+        await RisingEdge(dut.rx_clk)
+        await RisingEdge(dut.rx_clk)
+        await RisingEdge(dut.rx_clk)
+        await RisingEdge(dut.rx_clk)
+        await RisingEdge(dut.rx_clk)
+        await RisingEdge(dut.rx_clk)
+        await RisingEdge(dut.rx_clk)
+        await RisingEdge(dut.rx_clk)
 
 
     assert tb.sink.empty()
 
-    await RisingEdge(dut.packetClk)
-    await RisingEdge(dut.packetClk)
+    await RisingEdge(dut.rx_clk)
+    await RisingEdge(dut.rx_clk)
 
 def cycle_pause():
     return itertools.cycle([1, 1, 1, 0])

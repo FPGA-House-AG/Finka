@@ -32,7 +32,7 @@ TOPLEVEL_LANG ?= vhdl
 # verilator does not seem to simulate Finka yet, I get no UART output in CocoTB
 
 # choose prefered simulator based on TOPLEVEL_LANG later
-SIM ?= icarus
+SIM ?= ghdl
 WAVES ?= 0
 
 COCOTB_HDL_TIMEUNIT = 1ns
@@ -52,7 +52,8 @@ TOPLEVEL = $(shell echo $(DUT) | tr A-Z a-z)
 endif
 
 # generate soft-links to the RAM binaries
-IGNORE:=$(shell find ../../Finka.v*ram*.bin -type f | xargs -L1 echo ln -snf)
+#IGNORE1:=$(shell ls -ald $(DUTDIR)/Finka.v*ram*.bin >&2)
+IGNORE:=$(shell find $(DUTDIR)/Finka.v*ram*.bin -type f | xargs -L1 ln -snf >&2)
 
 # module parameters
 export PARAM_DATA_WIDTH ?= 32
