@@ -35,3 +35,7 @@ software/c/finka/hello_world/main.s
 *.o
 cocotb/Finka/finka
 *.ghw
+
+# Vivado simulator backend
+xsim.dir
+*.wdb
