@@ -610,7 +610,8 @@ object FinkaWithMemoryInit{
   def main(args: Array[String]) {
     val config = Config.spinal
     val verilog = config.generateVerilog({
-      val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex")
+      val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex")
+      //.copy(onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex")
       val toplevel = new Finka(socConfig)
       // return this
       toplevel
@@ -657,8 +658,8 @@ object FinkaSim {
     .withConfig(Config.spinal)
     .allOptimisation
     //.withGhdl.addRunFlag("--unbuffered").addRunFlag("--ieee-asserts=disable").addRunFlag("--assert-level=none").addRunFlag("--backtrace-severity=warning")
-    //.withVerilator.addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
-    .withXSim.withXilinxDevice("xcvu35p-fsvh2104-2-e")
+    .withVerilator.addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
+    //.withXSim.withXilinxDevice("xcvu35p-fsvh2104-2-e")
     // LD_LIBRARY_PATH=/opt/Xilinx//Vivado/2021.2/lib/lnx64.o stdbuf -oL -eL sbt "runMain finka.FinkaSim"
 
     val waveform = false

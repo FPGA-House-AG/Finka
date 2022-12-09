@@ -7,7 +7,8 @@
 #include "../../../../VexRiscv.pinned/src/test/cpp/common/jtag.h"
 #include "../../../../VexRiscv.pinned/src/test/cpp/common/uart.h"
 //#include "sync_reset.h"
-#include "tap.h"
+//#include "tap.h"
+#include "tuntap.h"
 
 class FinkaWorkspace : public Workspace<VFinka>{
 public:
@@ -22,15 +23,19 @@ public:
 		ClockDomain *rx_clk = new ClockDomain(&top->rx_clk, NULL, packetPeriod, clockStartDelay);
 		ClockDomain *tx_clk = new ClockDomain(&top->tx_clk, NULL, packetPeriod, clockStartDelay);
 
-		AsyncReset *rst = new AsyncReset(&top->rst, resetDeassertDelay);
+		AsyncReset *rst    = new AsyncReset(&top->rst,    resetDeassertDelay);
 		AsyncReset *tx_rst = new AsyncReset(&top->tx_rst, resetDeassertDelay);
 		AsyncReset *rx_rst = new AsyncReset(&top->rx_rst, resetDeassertDelay);
+
+		top->uart_txd = 1;
 
 		UartRx *uartRx = new UartRx(&top->uart_txd, 1.0e12 / 115200);
 		UartTx *uartTx = new UartTx(&top->uart_rxd, 1.0e12 / 115200);
 
-		TapTx *tapTx = new TapTx(top->s_axis_rx_tdata, &top->s_axis_rx_tkeep, &top->s_axis_rx_tuser, &top->s_axis_rx_tlast, &top->s_axis_rx_tvalid, &top->s_axis_rx_tready, 1.0e12 / 115200);
+		//TapTx *tapTx = new TapTx(top->s_axis_rx_tdata, &top->s_axis_rx_tkeep, &top->s_axis_rx_tuser, &top->s_axis_rx_tlast, &top->s_axis_rx_tvalid, &top->s_axis_rx_tready, 1.0e12 / 115200);
 
+	 	TunTapRx *tunTapRx = new TunTapRx(top->s_axis_rx_tdata, &top->s_axis_rx_tkeep, &top->s_axis_rx_tuser, &top->s_axis_rx_tlast, &top->s_axis_rx_tvalid, &top->s_axis_rx_tready);
+		rx_clk->add(tunTapRx);
 
 		timeProcesses.push_back(clk);
 		timeProcesses.push_back(rx_clk);
@@ -40,7 +45,7 @@ public:
 		timeProcesses.push_back(tx_rst);
 		timeProcesses.push_back(uartRx);
 		timeProcesses.push_back(uartTx);
-		timeProcesses.push_back(tapTx);
+		//timeProcesses.push_back(tapTx);
 
 		Jtag *jtag = new Jtag(&top->jtag_tms, &top->jtag_tdi, &top->jtag_tdo, &top->jtag_tck, axiPeriod * 4);
 		timeProcesses.push_back(jtag);

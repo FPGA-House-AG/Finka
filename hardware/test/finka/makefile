@@ -1,5 +1,5 @@
-DEBUG?=no
-TRACE?=no
+DEBUG?=yes
+TRACE?=yes
 PRINT_PERF?=no
 TRACE_START=0
 ADDCFLAGS += -CFLAGS -pthread -LDFLAGS -pthread
@@ -26,14 +26,17 @@ ADDCFLAGS += -CFLAGS -DTRACE_START=${TRACE_START}
 all: clean compile
 
 run: compile
-	#gdb --args ./obj_dir/VFinka -ex run
-	cp -a ../../../build/rtl/wireguard/Finka.v*ram*.bin .
+	cp -a ../../../build/rtl/Finka.v*ram*.bin .
+ifeq ($(DEBUG),yes)
+	gdb --args ./obj_dir/VFinka -ex run
+else
 	obj_dir/VFinka
+endif
 
 verilate: ../../../build/rtl/Finka.v
 	rm -f Finka.v*.bin
 	#verilator -I../../.. -cc $^ -CFLAGS -std=c++11  ${ADDCFLAGS} --gdbbt ${VERILATOR_ARGS} -Wno-WIDTH -Wno-UNOPTFLAT -Wno-MULTIDRIVEN --x-assign unique --exe main.cpp
-	verilator -I../../.. -cc $^ -CFLAGS -std=c++11  ${ADDCFLAGS} --gdbbt ${VERILATOR_ARGS} -Wno-WIDTH -Wno-UNOPTFLAT -Wno-MULTIDRIVEN --x-assign unique --exe main.cpp
+	verilator -cc $^ -CFLAGS -std=c++11  ${ADDCFLAGS} --gdbbt ${VERILATOR_ARGS} -Wno-WIDTH -Wno-UNOPTFLAT -Wno-MULTIDRIVEN --x-assign unique --exe main.cpp
  	
 compile: verilate
 	make -j16  -C obj_dir/ -f VFinka.mk VFinka

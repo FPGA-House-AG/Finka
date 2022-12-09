@@ -70,7 +70,7 @@ public:
 	WData *_tdata;
 	uint32_t uartTimeRate;
 
-	enum State {START, DATA, STOP};
+	enum State {START, DATA};
 	State state = START;
 	struct packet data;
 	int remaining;
@@ -99,6 +99,7 @@ public:
 		pthread_create(&inputThreadId, NULL, &inputThreadWrapper, this);
 		*tvalid = 0;
 		*tlast = 0;
+		*tuser = 0;
 	}
 
 	static void* inputThreadWrapper(void *uartTx){
@@ -109,17 +110,17 @@ public:
 	void inputThread() {
 		int packet_length = 1;
 		while(1){
-			// read from TAP
+			// { read from TAP here }
+
 			struct packet p;
 			for (int i = 0; i < 1534; i++)
 			p.payload[i] = (uint8_t)i;
-
-
 			p.length = packet_length;
+
 			inputsMutex.lock();
 			inputsQueue.push(p);
 			inputsMutex.unlock();
-			sleep(100);
+			sleep(5);
 			packet_length += 5;
 		}
 	}
@@ -127,14 +128,14 @@ public:
 	virtual void tick(){
 		switch(state){
 			case START:
-									*(this->_tlast) = 0;
-					*(this->_tvalid) = 0;
+				*(this->_tlast) = 0;
+				*(this->_tvalid) = 0;
 				inputsMutex.lock();
 				if(!inputsQueue.empty()){
 					data = inputsQueue.front();
-					printf("data.length = %d\n", data.length);
 					inputsQueue.pop();
 					inputsMutex.unlock();
+					printf("data.length = %d\n", data.length);
 					remaining = data.length;
 					counter = 0;
 					if (remaining > 0) {
@@ -146,9 +147,10 @@ public:
 					schedule(uartTimeRate* 1000000);
 					break;
 				}
-			//break;
+			break;
 			case DATA:
-				printf("counter = %d\n", counter);
+				assert(data.length > 0);
+				int last_beat = (data.length + 63) / 64 - 1;
 				*(this->_tvalid) = 1;
 				for (int i = 0, j = 0; i < 16; i++, j += 4) {
 					this->_tdata[i] = ((uint32_t)data.payload[j+3] << 24) | ((uint32_t)data.payload[j + 2] << 16) | ((uint32_t)data.payload[j + 1] << 8) | (uint32_t)data.payload[j] << 8;
@@ -158,28 +160,18 @@ public:
 					*this->_tkeep <<= 1;
 					*this->_tkeep |= 1;
 				}
+				if (counter == last_beat) {
+					*(this->_tlast) = 1;
+					state = START;
+				}
 
 				if (*(this->_tready)) {
+					printf("beat = %d/%d\n", counter + 1, last_beat + 1);
 					counter++;
 					remaining -= 512/8;
 				}
-				if (counter == ((data.length + 15)/16)) {
-					*(this->_tlast) = 1;
 
-					state = START;
-				}
 				schedule(uartTimeRate);
-			break;
-			case STOP:
-				//schedule(uartTimeRate);
-				//if (data) {
-					//free(data);
-					//data = NULL;
-				//}
-									*(this->_tlast) = 0;
-					*(this->_tvalid) = 0;
-
-				state = START;
 			break;
 		}
 	}
