@@ -6,20 +6,25 @@
 #include "../../../../VexRiscv.pinned/src/test/cpp/common/framework.h"
 #include "../../../../VexRiscv.pinned/src/test/cpp/common/jtag.h"
 #include "../../../../VexRiscv.pinned/src/test/cpp/common/uart.h"
+//#include "sync_reset.h"
 #include "tap.h"
 
 class FinkaWorkspace : public Workspace<VFinka>{
 public:
 	FinkaWorkspace() : Workspace("Finka"){
-		int axiPeriod = 1.0e12 / 250.0e6;
-		ClockDomain *clk = new ClockDomain(&top->clk, NULL, axiPeriod, 300000);
-		int packetPeriod = 1.0e12 / 322.0e6;
-		ClockDomain *rx_clk = new ClockDomain(&top->rx_clk, NULL, packetPeriod, 300000);
-		ClockDomain *tx_clk = new ClockDomain(&top->tx_clk, NULL, packetPeriod, 300000);
+		// for synchronous reset, ensure reset de-asssert delay is more than clock delay
+		uint64_t clockStartDelay = 20000;
+		uint64_t resetDeassertDelay = 2 * clockStartDelay;
 
-		AsyncReset *rst = new AsyncReset(&top->rst, 50000);
-		AsyncReset *tx_rst = new AsyncReset(&top->tx_rst, 50000);
-		AsyncReset *rx_rst = new AsyncReset(&top->rx_rst, 50000);
+		int axiPeriod = 1.0e12 / 250.0e6;
+		ClockDomain *clk = new ClockDomain(&top->clk, NULL, axiPeriod, clockStartDelay);
+		int packetPeriod = 1.0e12 / 322.0e6;
+		ClockDomain *rx_clk = new ClockDomain(&top->rx_clk, NULL, packetPeriod, clockStartDelay);
+		ClockDomain *tx_clk = new ClockDomain(&top->tx_clk, NULL, packetPeriod, clockStartDelay);
+
+		AsyncReset *rst = new AsyncReset(&top->rst, resetDeassertDelay);
+		AsyncReset *tx_rst = new AsyncReset(&top->tx_rst, resetDeassertDelay);
+		AsyncReset *rx_rst = new AsyncReset(&top->rx_rst, resetDeassertDelay);
 
 		UartRx *uartRx = new UartRx(&top->uart_txd, 1.0e12 / 115200);
 		UartTx *uartTx = new UartTx(&top->uart_rxd, 1.0e12 / 115200);

@@ -4,7 +4,6 @@ PRINT_PERF?=no
 TRACE_START=0
 ADDCFLAGS += -CFLAGS -pthread -LDFLAGS -pthread
 
-
 ifeq ($(TRACE),yes)
 	VERILATOR_ARGS += --trace
 	ADDCFLAGS += -CFLAGS -DTRACE --trace-fst
@@ -28,18 +27,20 @@ all: clean compile
 
 run: compile
 	#gdb --args ./obj_dir/VFinka -ex run
+	cp -a ../../../build/rtl/wireguard/Finka.v*ram*.bin .
 	obj_dir/VFinka
 
 verilate: ../../../build/rtl/Finka.v
 	rm -f Finka.v*.bin
-	cp -a ../../../build/rtl/Finka.v*ram*.bin . | true
 	#verilator -I../../.. -cc $^ -CFLAGS -std=c++11  ${ADDCFLAGS} --gdbbt ${VERILATOR_ARGS} -Wno-WIDTH -Wno-UNOPTFLAT -Wno-MULTIDRIVEN --x-assign unique --exe main.cpp
-	verilator -cc $^ -CFLAGS -std=c++11  ${ADDCFLAGS} --gdbbt ${VERILATOR_ARGS} -Wno-WIDTH -Wno-UNOPTFLAT -Wno-MULTIDRIVEN --x-assign unique --exe main.cpp
+	verilator -I../../.. -cc $^ -CFLAGS -std=c++11  ${ADDCFLAGS} --gdbbt ${VERILATOR_ARGS} -Wno-WIDTH -Wno-UNOPTFLAT -Wno-MULTIDRIVEN --x-assign unique --exe main.cpp
  	
 compile: verilate
-	make  -j  -C obj_dir/ -f VFinka.mk VFinka
+	make -j16  -C obj_dir/ -f VFinka.mk VFinka
  	
 clean:
 	rm -rf obj_dir
 	rm -f Finka.v*.bin
+	rm -f Finka.fst*
+	rm -f Finka.logTrace
  	
