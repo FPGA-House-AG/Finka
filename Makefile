@@ -27,8 +27,10 @@ sim_batch_debug:
 # build program for SoC, and RTL of SoC
 rtl:
 	set -e
-	# make -j8 -C software/c/finka/hello_world clean
-	# make -j8 -C software/c/finka/hello_world clean all DEBUG=yes
+	make -j8 -C software/c/finka/hello_world clean
+	make -j8 -C software/c/finka/hello_world clean all DEBUG=yes
+	make -j8 -C software/c/finka/pico-hello clean
+	make -j8 -C software/c/finka/pico-hello clean all DEBUG=yes
 	# runMain finka.LookupMemAxi4Verilog;
 	sbt "runMain finka.FinkaWithMemoryInit; runMain finka.FinkaWireguard"
 
