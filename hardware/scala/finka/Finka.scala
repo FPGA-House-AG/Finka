@@ -271,11 +271,13 @@ class Finka(val config: FinkaConfig) extends Component{
     //when(BufferCC(io.asyncReset)){
     //  systemResetCounter := 0
     //}
+import spinal.core.sim._
+import spinal.sim._
 
     //Create all reset used later in the design
     //val systemReset  = RegNext(io.rst) //simPublic()
-    val axiReset     = RegNext(io.rst) //simPublic()
-    val rxReset  = RegNext(io.rx_rst) //simPublic()
+    val axiReset     = RegNext(io.rst).simPublic()
+    val rxReset  = RegNext(io.rx_rst).simPublic()
   }
 
   val axiClockDomain = ClockDomain(
@@ -655,7 +657,9 @@ object FinkaSim {
     .withConfig(Config.spinal)
     .allOptimisation
     //.withGhdl.addRunFlag("--unbuffered").addRunFlag("--ieee-asserts=disable").addRunFlag("--assert-level=none").addRunFlag("--backtrace-severity=warning")
-    .withVerilator.addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
+    //.withVerilator.addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
+    .withXSim.withXilinxDevice("xcvu35p-fsvh2104-2-e")
+    // LD_LIBRARY_PATH=/opt/Xilinx//Vivado/2021.2/lib/lnx64.o stdbuf -oL -eL sbt "runMain finka.FinkaSim"
 
     val waveform = false
     if (waveform) simConfig.withFstWave//.withWaveDepth(10) // does not work with Verilator, use SimTimeout()
@@ -718,8 +722,10 @@ object FinkaSim {
       // run 0.1 second after done
       var cycles_post = 100000
 
-      dut.rxClockDomain.waitSampling(1)
-      dut.axiClockDomain.waitSampling(1)
+      //dut.rxClockDomain.waitSampling(1)
+      //dut.axiClockDomain.waitSampling(1)
+
+        rxClockDomain.waitRisingEdge(40)
 
 if (false) {
       // push one word in stream
@@ -754,12 +760,12 @@ dut.io.m_axis_tx.ready #= true
       //      dut.io.m_axis_tx.ready #= (Random.nextInt(8) > 2)
       //}
 
-      val monitorResetsThread = fork {
-        if (dut.resetCtrl.axiReset.toBoolean == true) {
-          printf("\nAXI RESET\n");
-          dut.axiClockDomain.waitRisingEdge()
-        }
-      }
+      //val monitorResetsThread = fork {
+      //  if (dut.resetCtrl.axiReset.toBoolean == true) {
+      //    printf("\nAXI RESET\n");
+      //    dut.axiClockDomain.waitRisingEdge()
+      //  }
+      //}
 
       // packet generator
       val sendThread = fork {
