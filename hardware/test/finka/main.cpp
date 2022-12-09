@@ -12,11 +12,14 @@ class FinkaWorkspace : public Workspace<VFinka>{
 public:
 	FinkaWorkspace() : Workspace("Finka"){
 		int axiPeriod = 1.0e12 / 250.0e6;
-		ClockDomain *axiClk = new ClockDomain(&top->axiClk, NULL, axiPeriod, 300000);
+		ClockDomain *clk = new ClockDomain(&top->clk, NULL, axiPeriod, 300000);
 		int packetPeriod = 1.0e12 / 322.0e6;
-		ClockDomain *packetClk = new ClockDomain(&top->packetClk, NULL, packetPeriod, 300000);
+		ClockDomain *rx_clk = new ClockDomain(&top->rx_clk, NULL, packetPeriod, 300000);
+		ClockDomain *tx_clk = new ClockDomain(&top->tx_clk, NULL, packetPeriod, 300000);
 
-		AsyncReset *asyncReset = new AsyncReset(&top->asyncReset, 50000);
+		AsyncReset *rst = new AsyncReset(&top->rst, 50000);
+		AsyncReset *tx_rst = new AsyncReset(&top->tx_rst, 50000);
+		AsyncReset *rx_rst = new AsyncReset(&top->rx_rst, 50000);
 
 		UartRx *uartRx = new UartRx(&top->uart_txd, 1.0e12 / 115200);
 		UartTx *uartTx = new UartTx(&top->uart_rxd, 1.0e12 / 115200);
@@ -24,9 +27,12 @@ public:
 		TapTx *tapTx = new TapTx(top->s_axis_rx_tdata, &top->s_axis_rx_tkeep, &top->s_axis_rx_tuser, &top->s_axis_rx_tlast, &top->s_axis_rx_tvalid, &top->s_axis_rx_tready, 1.0e12 / 115200);
 
 
-		timeProcesses.push_back(axiClk);
-		timeProcesses.push_back(packetClk);
-		timeProcesses.push_back(asyncReset);
+		timeProcesses.push_back(clk);
+		timeProcesses.push_back(rx_clk);
+		timeProcesses.push_back(tx_clk);
+		timeProcesses.push_back(rst);
+		timeProcesses.push_back(rx_rst);
+		timeProcesses.push_back(tx_rst);
 		timeProcesses.push_back(uartRx);
 		timeProcesses.push_back(uartTx);
 		timeProcesses.push_back(tapTx);
@@ -65,7 +71,7 @@ int main(int argc, char **argv, char **env) {
 	printf("BOOT\n");
 	timespec startedAt = timer_start();
 
-	FinkaWorkspace().run(1e7);
+	FinkaWorkspace().run(1e9);
 
 	uint64_t duration = timer_end(startedAt);
 	cout << endl << "****************************************************************" << endl;
