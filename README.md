@@ -26,6 +26,12 @@ make -C cocotb/finka
 
 Generate the Verilog source, then compile and run the Verilated executable
 
+make -C software/c/finka/pico-hello
 make rtl
 make -C hardware/test/finka run
 
+(For some reason, the initial software does not run.) But:
+
+make debug
+
+will upload via JTAG and run.
