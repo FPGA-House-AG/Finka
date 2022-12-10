@@ -1,4 +1,4 @@
-DEBUG?=yes
+DEBUG?=no
 TRACE?=yes
 PRINT_PERF?=no
 TRACE_START=0
@@ -25,8 +25,12 @@ ADDCFLAGS += -CFLAGS -DTRACE_START=${TRACE_START}
 
 all: clean compile
 
-run: compile
+run: compile tap
 	cp -a ../../../build/rtl/Finka.v*ram*.bin .
+	# depends on a root capability
+	# RUN echo "ALL ALL = NOPASSWD:/usr/sbin/setcap cap_net_admin=+pe" >>/etc/sudoers.d/cap_net
+	#sudo setcap cap_net_admin=+pe ./obj_dir/VFinka
+	 ./obj_dir/VFinka
 ifeq ($(DEBUG),yes)
 	gdb --args ./obj_dir/VFinka -ex run
 else
@@ -46,4 +50,17 @@ clean:
 	rm -f Finka.v*.bin
 	rm -f Finka.fst*
 	rm -f Finka.logTrace
+
+.PHONY: tap
+tap:
+	# Depends on:
+	# RUN echo "ALL ALL = NOPASSWD:/usr/sbin/ip" >>/etc/sudoers.d/ip
+	sudo ip link delete tap0
+	#echo USER=$(shell id -un)
+	sudo ip tuntap add tap0 mode tap user $(shell id -un) group $(shell id -gn)
+	sudo ip link set tap0 up
+	sudo ip addr add 192.168.255.1 peer 192.168.255.2 dev tap0
+	#sudo ip addr add local 192.168.255.1 remote 192.168.255.2 dev tap0
+	sudo ip link set address aa:bb:cc:11:11:11 dev tap0
+	sudo arp -s 192.168.255.2 aa:bb:cc:22:22:22 
  	
