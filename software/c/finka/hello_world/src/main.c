@@ -10,9 +10,10 @@ void print(const char*str){
 }
 
 print_int(int x) {
+	int y = x;
 	if (x >= 100) uart_write(UART, '0' + x/100);
 	x %= 100;
-	if (x >= 10) uart_write(UART, '0' + x/10);
+	if (y >= 10) uart_write(UART, '0' + x/10);
 	x %= 10;
 	uart_write(UART, '0' + x);
 	uart_write(UART,'\n');
