@@ -22,7 +22,7 @@ make rtl
 make -C cocotb/finka
 
 
-### TESTING VERILATED
+### TESTING WITH VERILATOR, FULLY VERILATED
 
 Generate the Verilog source, then compile and run the Verilated executable
 
@@ -30,8 +30,13 @@ make -C software/c/finka/pico-hello
 make rtl
 make -C hardware/test/finka run
 
-(For some reason, the initial software does not run.) But:
+This will run the initial program in RAM; this is loaded by the "make run"
+step. So to run a different program only the RAM binaries have to be updated,
+the RTL remains identical. However, the RAM binaries are generated during the
+RTL step, as Finka uses separate BRAMs per byte lane, handled by SpinalHDL.
+
+When the executable is run, it will also expose a JTAG/TCP interface, so:
 
 make debug
 
-will upload via JTAG and run.
+will allow upload via JTAG and debug via GDB.

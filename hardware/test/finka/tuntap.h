@@ -3,6 +3,18 @@
 #include <mutex>
 #include <queue>
 
+
+	
+	#include <stdio.h>
+	#include <string.h>
+	#include <unistd.h>
+	#include <errno.h>
+	#include <arpa/inet.h>
+	#include <net/if.h>
+	#include <netinet/ether.h>
+	#include <linux/if_packet.h>
+	#include <sys/ioctl.h>
+
 struct packet {
 	uint8_t payload[1534];
 	int length;
@@ -18,6 +30,7 @@ public:
     WData *_tdata;
 
 	pthread_t rxThreadId;
+	pthread_t rxThreadTapId;
 	queue<packet> inputsQueue;
 	mutex inputsMutex;
 
@@ -46,6 +59,7 @@ public:
         *this->_tvalid = 0;
         *this->_tuser = 0;
    		pthread_create(&rxThreadId, NULL, &rxThreadWork, this);
+   		pthread_create(&rxThreadTapId, NULL, &rxThreadTapWork, this);
     }
 
 	static void* rxThreadWork(void *self){
@@ -54,7 +68,7 @@ public:
 	}
 
 	void rxThread() {
-		int packet_length = 1;
+		int packet_length = 101;
 		while(1){
 			// { read from TAP here }
 
@@ -67,17 +81,79 @@ public:
 			inputsQueue.push(p);
 			inputsMutex.unlock();
 			sleep(5);
-			packet_length += 5;
+			packet_length += 53;
 		}
 	}
 
+	static void* rxThreadTapWork(void *self){
+		((TunTapRx *)self)->rxThreadTap();
+		return NULL;
+	}
+ 
+    /*
+	sudo tunctl -d tap0
+	sudo tunctl -u vivado -t tap0
+	sudo ip link set tap0 up
+	sudo ip addr add 192.168.255.1 peer 192.168.255.2 dev tap0
+	sudo ip addr add local 192.168.255.1 remote 192.168.255.2 dev tap0
+	sudo ip link set address aa:bb:cc:11:11:11 dev tap0
+	sudo arp -s 192.168.255.2 aa:bb:cc:22:22:22 
+    */
+	void rxThreadTap() {
+
+		int n;
+		int ret = 0;
+		int sock;
+		char buf[2048];
+		struct ifreq ifreq;
+		struct sockaddr_ll saddr;
+
+		// create socket
+		if((sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) == -1) {
+			ret = errno;
+			goto error_exit;
+		}
+
+		// bind tap0
+		snprintf(ifreq.ifr_name, sizeof(ifreq.ifr_name), "tap0");
+		if (ioctl(sock, SIOCGIFINDEX, &ifreq)) {
+			ret = errno;
+			goto error_exit;
+		}
+
+		memset(&saddr, 0, sizeof(saddr));
+		saddr.sll_family = AF_PACKET;
+		saddr.sll_protocol = htons(ETH_P_ALL);
+		saddr.sll_ifindex = ifreq.ifr_ifindex;
+		saddr.sll_pkttype = PACKET_HOST;
+
+		if(bind(sock, (struct sockaddr *)&saddr, sizeof(saddr)) == -1) {
+			ret = errno;
+			goto error_exit;
+		}
+
+		// recv data
+		while(1) {
+			printf("waiting for packet on TAP0\n", n);
+
+			n = recvfrom(sock, buf, sizeof(buf), 0, NULL, NULL);
+			printf("%d bytes received\n", n);
+		}
+
+	error_exit:
+		if (ret) {
+			printf("error: %s (%d)\n", strerror(ret), ret);
+		}
+		close(sock);
+		//return ret;
+	}
 
     virtual void postCycle(){
-				if (*(this->_tvalid) && *(this->_tready)) {
-					printf("beat = %d/%d\n", beat + 1, last_beat + 1);
-					beat++;
-					remaining -= 512/8;
-				}
+		if (*(this->_tvalid) && *(this->_tready)) {
+			//printf("beat = %d/%d\n", beat + 1, last_beat + 1);
+			beat++;
+			remaining -= 512/8;
+		}
 
     }
 

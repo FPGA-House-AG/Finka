@@ -6,36 +6,40 @@
 #include "../../../../VexRiscv.pinned/src/test/cpp/common/framework.h"
 #include "../../../../VexRiscv.pinned/src/test/cpp/common/jtag.h"
 #include "../../../../VexRiscv.pinned/src/test/cpp/common/uart.h"
-//#include "sync_reset.h"
-//#include "tap.h"
+
 #include "tuntap.h"
 
 class FinkaWorkspace : public Workspace<VFinka>{
 public:
 	FinkaWorkspace() : Workspace("Finka"){
-		// for synchronous reset, ensure reset de-asssert delay is more than clock delay
+		// for synchronous reset, ensure reset de-assert delay is more than clock delay
 		uint64_t clockStartDelay = 20000;
 		uint64_t resetDeassertDelay = 2 * clockStartDelay;
 
+		/* time processes; clocks */
 		int axiPeriod = 1.0e12 / 250.0e6;
 		ClockDomain *clk = new ClockDomain(&top->clk, NULL, axiPeriod, clockStartDelay);
 		int packetPeriod = 1.0e12 / 322.0e6;
 		ClockDomain *rx_clk = new ClockDomain(&top->rx_clk, NULL, packetPeriod, clockStartDelay);
 		ClockDomain *tx_clk = new ClockDomain(&top->tx_clk, NULL, packetPeriod, clockStartDelay);
 
+		/* time processes; *synchronous* resets, de-asserting with clocks enabled */
 		AsyncReset *rst    = new AsyncReset(&top->rst,    resetDeassertDelay);
 		AsyncReset *tx_rst = new AsyncReset(&top->tx_rst, resetDeassertDelay);
 		AsyncReset *rx_rst = new AsyncReset(&top->rx_rst, resetDeassertDelay);
 
 		top->uart_txd = 1;
 
+		/* UART */
 		UartRx *uartRx = new UartRx(&top->uart_txd, 1.0e12 / 115200);
 		UartTx *uartTx = new UartTx(&top->uart_rxd, 1.0e12 / 115200);
 
-		//TapTx *tapTx = new TapTx(top->s_axis_rx_tdata, &top->s_axis_rx_tkeep, &top->s_axis_rx_tuser, &top->s_axis_rx_tlast, &top->s_axis_rx_tvalid, &top->s_axis_rx_tready, 1.0e12 / 115200);
-
+		/* clock synchronous processes */
 	 	TunTapRx *tunTapRx = new TunTapRx(top->s_axis_rx_tdata, &top->s_axis_rx_tkeep, &top->s_axis_rx_tuser, &top->s_axis_rx_tlast, &top->s_axis_rx_tvalid, &top->s_axis_rx_tready);
 		rx_clk->add(tunTapRx);
+
+		/* accept incoming AXIS frames from DUT */
+		top->m_axis_tx_tready = 1;
 
 		timeProcesses.push_back(clk);
 		timeProcesses.push_back(rx_clk);
@@ -45,14 +49,14 @@ public:
 		timeProcesses.push_back(tx_rst);
 		timeProcesses.push_back(uartRx);
 		timeProcesses.push_back(uartTx);
-		//timeProcesses.push_back(tapTx);
 
+		/* JTAG over TCP debug server */
 		Jtag *jtag = new Jtag(&top->jtag_tms, &top->jtag_tdi, &top->jtag_tdo, &top->jtag_tck, axiPeriod * 4);
 		timeProcesses.push_back(jtag);
 
 		#ifdef TRACE
 		//speedFactor = 10e-3;
-		//cout << "Simulation caped to " << speedFactor << " of real time"<< endl;
+		//cout << "Simulation capped to " << speedFactor << " of real time"<< endl;
 		#endif
 	}
 };
