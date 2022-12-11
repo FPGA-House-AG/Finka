@@ -1,10 +1,3 @@
-
-#include <pthread.h>
-#include <mutex>
-#include <queue>
-
-
-	
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -16,11 +9,17 @@
 #include <sys/ioctl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
-	#include <sys/types.h>
-	#include <sys/stat.h>
-	#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include <pthread.h>
+
+#include <mutex>
+#include <queue>
+
 struct packet {
-	uint8_t payload[1534];
+	uint8_t payload[2048];
 	int length;
 };
 
@@ -35,12 +34,13 @@ public:
 
 	pthread_t rxThreadId;
 	pthread_t rxThreadTapId;
-	queue<packet> inputsQueue;
-	mutex inputsMutex;
+	queue<packet> rxQueue;
+	mutex rxMutex;
 
     enum State {START, DATA, STOP};
 	State state = START;
 	struct packet data;
+	int sent;
 	int remaining;
 	uint32_t beat;
 	int last_beat;
@@ -81,9 +81,9 @@ public:
 			p.payload[i] = (uint8_t)i;
 			p.length = packet_length;
 
-			inputsMutex.lock();
-			inputsQueue.push(p);
-			inputsMutex.unlock();
+			rxMutex.lock();
+			rxQueue.push(p);
+			rxMutex.unlock();
 			sleep(5);
 			packet_length += 53;
 		}
@@ -94,6 +94,7 @@ public:
 		return NULL;
 	}
  
+	/* forward packets from TAP to queue */
 	void rxThreadTap() {
 
 		int n;
@@ -122,8 +123,8 @@ public:
 			//printf("Waiting for packet on TAP0\n");
 
 			struct packet p;
-			for (int i = 0; i < 1534; i++)
-			p.payload[i] = (uint8_t)i;
+			for (int i = 0; i < 2048; i++)
+			p.payload[i] = (uint8_t)0;
 			p.length = 0;
 
 			p.length = read(tapfd, &p.payload[0], sizeof(p.payload));
@@ -131,9 +132,9 @@ public:
 				perror("read");
 			} else if (p.length > 60) {
 				//printf("%d bytes received\n", p.length);
-				inputsMutex.lock();
-				inputsQueue.push(p);
-				inputsMutex.unlock();
+				rxMutex.lock();
+				rxQueue.push(p);
+				rxMutex.unlock();
 			}
 		}
 
@@ -147,49 +148,63 @@ public:
 
     virtual void postCycle(){
 		if (*(this->_tvalid) && *(this->_tready)) {
-			//printf("beat = %d/%d\n", beat + 1, last_beat + 1);
-			beat++;
-			remaining -= 512/8;
+			printf("beat = %d/%d\n", beat + 1, last_beat + 1);
+			if (beat == last_beat) {
+				state = START;
+			} else {
+				sent += 512/8;
+				remaining -= 512/8;
+				beat++;
+			}
 		}
-
     }
 
     virtual void preCycle(){
-		switch(state){
+		switch(state) {
+			// wait for new packet in queue
 			case START:
 				*(this->_tlast) = 0;
 				*(this->_tvalid) = 0;
-				inputsMutex.lock();
-				if(!inputsQueue.empty()){
-					data = inputsQueue.front();
-					inputsQueue.pop();
-					inputsMutex.unlock();
-					printf("data.length = %d\n", data.length);
+				rxMutex.lock();
+				if(!rxQueue.empty()){
+					data = rxQueue.front();
+					rxQueue.pop();
+					rxMutex.unlock();
+					// initialize counters 
+					sent = 0;
 					remaining = data.length;
 					beat = 0;
 					if (remaining > 0) {
+						for (int i = 0; i < data.length; i++) {
+							printf("%02x", data.payload[i]);
+						}
+						printf("\n");
+						printf("data.length = %d\n", data.length);
+
 						state = DATA;
 					    last_beat = (data.length + 63) / 64 - 1;
 					}
 				} else {
-					inputsMutex.unlock();
+					rxMutex.unlock();
 					break;
 				}
 			break;
 			case DATA:
 				assert(data.length > 0);
 				*(this->_tvalid) = 1;
-				for (int i = 0, j = 0; i < 16; i++, j += 4) {
-					this->_tdata[i] = ((uint32_t)data.payload[j+3] << 24) | ((uint32_t)data.payload[j + 2] << 16) | ((uint32_t)data.payload[j + 1] << 8) | (uint32_t)data.payload[j] << 8;
+				// j points indexes the data bytes in the packet data from queue
+				// i indexes the uint32_t word of _tdata[]
+				for (int i = 0, j = sent; i < 16; i++, j += 4) {
+					this->_tdata[i] = ((uint32_t)data.payload[j+3] << 24) | ((uint32_t)data.payload[j + 2] << 16) | ((uint32_t)data.payload[j + 1] << 8) | ((uint32_t)data.payload[j] << 0);
 				}
 				*this->_tkeep = 0;
 				for (int i = 0; (i < remaining) & (i < 64); i++) {
 					*this->_tkeep <<= 1;
 					*this->_tkeep |= 1;
 				}
+				*(this->_tlast) = 0;
 				if (beat == last_beat) {
 					*(this->_tlast) = 1;
-					state = START;
 				}
 			break;
 		}
