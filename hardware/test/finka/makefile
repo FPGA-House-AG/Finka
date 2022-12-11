@@ -26,7 +26,7 @@ ADDCFLAGS += -CFLAGS -DTRACE_START=${TRACE_START}
 all: clean compile
 
 run: compile tap
-	cp -a ../../../build/rtl/Finka.v*ram*.bin .
+	cp -a ../../../build/rtl/wireguard/Finka.v*ram*.bin .
 	# depends on a root capability
 	# RUN echo "ALL ALL = NOPASSWD:/usr/sbin/setcap cap_net_admin=+pe" >>/etc/sudoers.d/cap_net
 	#sudo setcap cap_net_admin=+pe ./obj_dir/VFinka
