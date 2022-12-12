@@ -1,20 +1,20 @@
 [*]
 [*] GTKWave Analyzer v3.4.0 (w)1999-2022 BSI
-[*] Sun Dec 11 12:18:35 2022
+[*] Sun Dec 11 14:50:57 2022
 [*]
 [dumpfile] "/project-on-host/Finka/hardware/test/finka/Finka.fst"
-[dumpfile_mtime] "Sun Dec 11 12:18:35 2022"
-[dumpfile_size] 177015012
+[dumpfile_mtime] "Sun Dec 11 14:50:56 2022"
+[dumpfile_size] 63098558
 [savefile] "/project-on-host/Finka/hardware/test/finka/VFinka.gtkw"
-[timestart] 1125309260
+[timestart] 0
 [size] 1762 924
 [pos] -1 -1
-*-13.000000 1125330150 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-31.000000 539718688 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] TOP.
 [treeopen] TOP.Finka.
 [treeopen] TOP.Finka.packetRx_packetReader.
-[sst_width] 367
-[signals_width] 401
+[sst_width] 260
+[signals_width] 419
 [sst_expanded] 1
 [sst_vpaned_height] 266
 @28
@@ -47,5 +47,17 @@ TOP.Finka.packetRx_packetReader.ctrlbus_ar_addr[9:0]
 @28
 TOP.Finka.packetRx_packetReader.ctrlbus_ar_tready
 TOP.Finka.packetRx_packetReader.ctrlbus_ar_tvalid
+@200
+-
+-AXIS TX
+@22
+TOP.Finka.m_axis_tx_tdata[511:0]
+TOP.Finka.m_axis_tx_tkeep[63:0]
+@28
+TOP.Finka.m_axis_tx_tlast
+TOP.Finka.m_axis_tx_tready
+TOP.Finka.m_axis_tx_tuser[0]
+@29
+TOP.Finka.m_axis_tx_tvalid
 [pattern_trace] 1
 [pattern_trace] 0
