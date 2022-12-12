@@ -23,6 +23,12 @@ struct packet {
 	int length;
 };
 
+// @TODO currently used shared by TunTapRx and Tx
+// access not properly locked but we assume
+// sequential constructors in C++
+// @TODO at least add ref count to prevent early close
+static int tapfd = -1;
+
 class TunTapRx : public SimElement {
 public:
     CData *_tlast;
@@ -99,11 +105,12 @@ public:
 
 		int n;
 		int ret = 0;
-		int tapfd;
 		char buf[2048];
 		struct ifreq ifreq;
 
-		tapfd = open("/dev/net/tun", O_RDWR);
+		if (tapfd < 0) {
+			printf("Opening tapfd for rx\n");
+			tapfd = open("/dev/net/tun", O_RDWR);
 		if (tapfd < 0) {
 			perror("open");
 			return; // Or otherwise handle the error.
@@ -116,6 +123,7 @@ public:
 		if (err < 0) {
 			perror("ioctl");
 			return; // Or otherwise handle the error.
+		}
 		}
 
 		// recv data
@@ -130,7 +138,7 @@ public:
 			p.length = read(tapfd, &p.payload[0], sizeof(p.payload));
 			if (p.length < 0) {
 				perror("read");
-			} else if (p.length > 60) {
+			} else {
 				//printf("%d bytes received\n", p.length);
 				rxMutex.lock();
 				rxQueue.push(p);
@@ -146,7 +154,8 @@ public:
 		//return ret;
 	}
 
-    virtual void postCycle(){
+    virtual void postCycle() {
+		// rx
 		if (*(this->_tvalid) && *(this->_tready)) {
 			printf("beat = %d/%d\n", beat + 1, last_beat + 1);
 			if (beat == last_beat) {
@@ -175,11 +184,12 @@ public:
 					remaining = data.length;
 					beat = 0;
 					if (remaining > 0) {
+						printf("\nRX: ");
 						for (int i = 0; i < data.length; i++) {
 							printf("%02x", data.payload[i]);
 						}
 						printf("\n");
-						printf("data.length = %d\n", data.length);
+						printf("from TAP to DUT, data.length = %d\n", data.length);
 
 						state = DATA;
 					    last_beat = (data.length + 63) / 64 - 1;
@@ -208,5 +218,158 @@ public:
 				}
 			break;
 		}
+    }
+};
+
+class TunTapTx : public SimElement {
+public:
+    CData *_tlast;
+    CData *_tready;
+    CData *_tvalid;
+    CData *_tuser;
+    QData *_tkeep;
+    WData *_tdata;
+
+	pthread_t txThreadTapId;
+	queue<packet> txQueue;
+	mutex txMutex;
+
+    enum State {START, DATA, STOP};
+	State state = START;
+	struct packet data;
+	int received;
+	uint32_t beat;
+	int last_beat;
+
+	TunTapTx(WData *tdata, QData *tkeep, CData *tuser, CData *tlast, CData *tvalid, CData *tready) {
+		this->_tlast =  tlast;
+		this->_tdata =  tdata;
+		this->_tkeep =  tkeep;
+		this->_tuser =  tuser;
+		this->_tvalid = tvalid;
+		this->_tready = tready;
+        init();
+    }
+
+    virtual ~TunTapTx() {
+
+    }
+
+    void init(){
+        *this->_tready = 1;
+		received = 0;
+   		pthread_create(&txThreadTapId, NULL, &txThreadTapWork, this);
+    }
+
+	static void* txThreadTapWork(void *self){
+		((TunTapTx *)self)->txThreadTap();
+		return NULL;
+	}
+ 
+	/* forward packets from TAP to queue */
+	void txThreadTap() {
+
+		int n;
+		int ret = 0;
+		//int tapfd;
+		char buf[2048];
+		struct ifreq ifreq;
+
+		if (tapfd < 0) {
+			printf("Opening tapfd for tx\n");
+			tapfd = open("/dev/net/tun", O_RDWR);
+
+		if (tapfd < 0) {
+			perror("open");
+			return; // Or otherwise handle the error.
+		}
+
+      	memset(&ifreq, 0, sizeof(ifreq));
+		snprintf(ifreq.ifr_name, sizeof(ifreq.ifr_name), "tap0");
+		ifreq.ifr_flags = IFF_TAP | IFF_NO_PI;
+		int err = ioctl(tapfd, TUNSETIFF, (void *)&ifreq);
+		if (err < 0) {
+			perror("ioctl");
+			return; // Or otherwise handle the error.
+		}
+		}
+
+		printf("Waiting for packet on AXIS queue\n");
+		while(1) {
+			struct packet p;
+			txMutex.lock();
+			if(!txQueue.empty()){
+				p = txQueue.front();
+				printf("TX from AXIS queue, length = %d\n", p.length);
+				txQueue.pop();
+				txMutex.unlock();
+				int sent = write(tapfd, &p.payload[0], p.length);
+				printf("\nTX: ");
+				for (int i = 0; i < p.length; i++) {
+					printf("%02x", p.payload[i]);
+				}
+				printf("\n");
+				if (sent != p.length) {
+					printf("write(tap)=%d, but expected p.length%d\n", sent, p.length);
+					perror("write");
+				}
+			} else {
+				txMutex.unlock();
+			}
+		}
+
+	error_exit:
+		if (ret) {
+			printf("error: %s (%d)\n", strerror(ret), ret);
+		}
+		close(tapfd);
+		//return ret;
+	}
+
+    virtual void postCycle() {
+		// tx
+		if (*(this->_tvalid) && *(this->_tready)) {
+			printf("beat = %d incoming\n", beat + 1);
+			int tkeep_len = 0;
+			uint64_t tkeep = *(this->_tkeep);
+			printf("TKEEP = 0x%016llx, ", (unsigned long long)tkeep);
+			while (tkeep & 1) {
+				tkeep_len += 1;
+				tkeep >>= 1;
+			}
+			printf("tkeep_length = %d\n", tkeep_len);
+			// j points indexes the data bytes in the packet data from queue
+			// i indexes the uint32_t word of _tdata[]
+			for (int i = 0, j = received; i < 16; i++, j += 4) {
+				data.payload[j + 0] = (this->_tdata[i] >>  0) & 0xff;
+				data.payload[j + 1] = (this->_tdata[i] >>  8) & 0xff;
+				data.payload[j + 2] = (this->_tdata[i] >> 16) & 0xff;
+				data.payload[j + 3] = (this->_tdata[i] >> 24) & 0xff;
+			}
+			// TLAST = 0?
+			if (*(this->_tlast) == 0) {
+				if (tkeep_len < 64) {
+					printf("Unexpected tkeep_len = %d as tlast = 0.\n", tkeep_len);
+				}
+				received += 64;
+ 				printf("received = %d, non-last\n", received);
+			// TLAST = 1
+			} else {
+				received += tkeep_len;
+				data.length = received;
+ 				printf("received = %d pushing into queue\n", received);
+				txMutex.lock();
+				txQueue.push(data);
+				txMutex.unlock();
+				received = 0;
+				for (int i = 0; i < 1538; i++) {
+					data.payload[i] = 0;
+				}
+ 				printf("done\n");
+			}
+		}
+    }
+
+    virtual void preCycle(){
     }
 };
