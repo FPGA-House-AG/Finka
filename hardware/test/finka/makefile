@@ -1,5 +1,5 @@
 DEBUG?=no
-TRACE?=yes
+TRACE?=no
 PRINT_PERF?=no
 TRACE_START=0
 ADDCFLAGS += -CFLAGS -pthread -LDFLAGS -pthread
@@ -56,11 +56,15 @@ tap:
 	# Depends on:
 	# RUN echo "ALL ALL = NOPASSWD:/usr/sbin/ip" >>/etc/sudoers.d/ip
 	sudo ip link delete tap0
-	#echo USER=$(shell id -un)
 	sudo ip tuntap add tap0 mode tap user $(shell id -un) group $(shell id -gn)
-	sudo ip link set tap0 up
-	sudo ip addr add 192.168.255.1 peer 192.168.255.2 dev tap0
-	#sudo ip addr add local 192.168.255.1 remote 192.168.255.2 dev tap0
 	sudo ip link set address aa:bb:cc:11:11:11 dev tap0
-	sudo arp -s 192.168.255.2 aa:bb:cc:22:22:22 
+	sudo ip link set tap0 up
+	sudo ip addr add 192.168.255.1/24 dev tap0
+
+# POINTOPOINT does not perform any ARP
+archived:
+	#echo USER=$(shell id -un)
+	#sudo ip addr add 192.168.255.1 peer 192.168.255.2 dev tap0
+	#sudo ip addr add local 192.168.255.1 remote 192.168.255.2 dev tap0
+	#sudo arp -s 192.168.255.2 aa:bb:cc:22:22:22 
  	
