@@ -9,10 +9,15 @@
 
 #include "tuntap.h"
 
+//#define TRACE_INSTRUCTION 1
+//#define TRACE_REG 1
+//#include "vexriscvtracer.h" 
+
 class FinkaWorkspace : public Workspace<VFinka>{
 public:
 	FinkaWorkspace() : Workspace("Finka"){
 		// for synchronous reset, ensure reset de-assert delay is more than clock delay
+		uint64_t baudRate = 115200 * 8;
 		uint64_t clockStartDelay = 20000;
 		uint64_t resetDeassertDelay = 2 * clockStartDelay;
 
@@ -31,12 +36,15 @@ public:
 		top->uart_txd = 1;
 
 		/* UART */
-		UartRx *uartRx = new UartRx(&top->uart_txd, 1.0e12 / 115200);
-		UartTx *uartTx = new UartTx(&top->uart_rxd, 1.0e12 / 115200);
+		UartRx *uartRx = new UartRx(&top->uart_txd, 1.0e12 / baudRate);
+		UartTx *uartTx = new UartTx(&top->uart_rxd, 1.0e12 / baudRate);
 
 		/* clock synchronous processes */
 	 	TunTapRx *tunTapRx = new TunTapRx(top->s_axis_rx_tdata, &top->s_axis_rx_tkeep, &top->s_axis_rx_tuser, &top->s_axis_rx_tlast, &top->s_axis_rx_tvalid, &top->s_axis_rx_tready);
 		rx_clk->add(tunTapRx);
+
+	 	TunTapTx *tunTapTx = new TunTapTx(top->m_axis_tx_tdata, &top->m_axis_tx_tkeep, &top->m_axis_tx_tuser, &top->m_axis_tx_tlast, &top->m_axis_tx_tvalid, &top->m_axis_tx_tready);
+		tx_clk->add(tunTapTx);
 
 		/* accept incoming AXIS frames from DUT */
 		top->m_axis_tx_tready = 1;
@@ -61,7 +69,6 @@ public:
 	}
 };
 
-
 struct timespec timer_start(){
     struct timespec start_time;
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_time);
@@ -75,8 +82,6 @@ long timer_end(struct timespec start_time){
     return diffInNanos;
 }
 
-
-
 int main(int argc, char **argv, char **env) {
 
 	Verilated::randReset(2);
@@ -89,7 +94,6 @@ int main(int argc, char **argv, char **env) {
 
 	uint64_t duration = timer_end(startedAt);
 	cout << endl << "****************************************************************" << endl;
-
 
 	exit(0);
 }
