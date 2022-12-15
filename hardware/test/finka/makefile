@@ -55,7 +55,7 @@ clean:
 tap:
 	# Depends on:
 	# RUN echo "ALL ALL = NOPASSWD:/usr/sbin/ip" >>/etc/sudoers.d/ip
-	sudo ip link delete tap0
+	sudo ip link delete tap0 || true
 	sudo ip tuntap add tap0 mode tap user $(shell id -un) group $(shell id -gn)
 	sudo ip link set address aa:bb:cc:11:11:11 dev tap0
 	sudo ip link set tap0 up
