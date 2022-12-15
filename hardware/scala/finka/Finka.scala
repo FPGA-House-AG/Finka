@@ -526,20 +526,21 @@ import spinal.sim._
   // packet rx clock domain
   val packetRx = new ClockingArea(rxClockDomain) {
     val packetRxAxi4SharedBus = Axi4Shared(busconfig)
+    val sink = Stream(Fragment(CorundumFrame(corundumDataWidth)))
 
     // received on Ethernet port, going into SoC
-    val dropOnFull = CorundumFrameDrop(corundumDataWidth)
-    val readerStash = CorundumFrameStash(corundumDataWidth, 32)
+    val stash = CorundumFrameOutputStash(corundumDataWidth, 32, 24)
+    // drop when stash does not have room for a full packet
+    val drop = !stash.io.sink.ready
+    stash.io.sink << sink.throwWhen(drop)
     val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
-    readerStash.io.sink << dropOnFull.io.source 
-    dropOnFull.io.drop := (readerStash.io.availability < 2)
-    packetReader.io.input << readerStash.io.source
+    packetReader.io.input << stash.io.source
 
     // connect to bus
     packetReader.io.ctrlbus << packetRxAxi4SharedBus.toAxi4()
   }
   // connect AXIS RX from Corundum to Finka
-  io.s_axis_rx >> packetRx.dropOnFull.io.sink
+  io.s_axis_rx >> packetRx.sink
 
   // packet tx clock domain
   val packetTx = new ClockingArea(txClockDomain) {
