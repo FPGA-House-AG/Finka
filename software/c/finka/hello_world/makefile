@@ -2,9 +2,9 @@
 # showing custom C run time, linker script etc.
 
 PROJ_NAME=hello_world
-DEBUG=no
+DEBUG=yes
 BENCH=no
-MULDIV=no
+MULDIV=yes
 
 SRCS = 	$(wildcard ../hal/*.c) \
 		$(wildcard src/*.c) \
@@ -24,16 +24,17 @@ RISCV_PATH ?= /opt/x-tools/riscv32-unknown-elf
 RISCV_NAME ?= riscv32-unknown-elf
 
 MABI=ilp32
-MARCH := rv32i_zicsr_zifencei
+MARCH := rv32i
 ifeq ($(MULDIV),yes)
 	MARCH := $(MARCH)m
 endif
 ifeq ($(COMPRESSED),yes)
 	MARCH := $(MARCH)ac
 endif
+MARCH := $(MARCH)_zicsr_zifencei
 
-CFLAGS += -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG
-LDFLAGS += -march=$(MARCH)  -mabi=$(MABI)
+CFLAGS +=  -march=$(MARCH) -mabi=$(MABI) -DNDEBUG
+LDFLAGS += -march=$(MARCH) -mabi=$(MABI)
 
 #include ../../../resources/subproject.mk
 
