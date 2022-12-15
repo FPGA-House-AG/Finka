@@ -100,7 +100,7 @@ public:
 		return NULL;
 	}
  
-	/* forward packets from TAP to queue */
+	/* forward packets from TAP to DUT queue */
 	void rxThreadTap() {
 
 		int n;
@@ -157,7 +157,7 @@ public:
     virtual void postCycle() {
 		// rx
 		if (*(this->_tvalid) && *(this->_tready)) {
-			printf("beat = %d/%d\n", beat + 1, last_beat + 1);
+			printf("beat = %d/%d TAP to DUT\n", beat + 1, last_beat + 1);
 			if (beat == last_beat) {
 				state = START;
 			} else {
@@ -184,12 +184,11 @@ public:
 					remaining = data.length;
 					beat = 0;
 					if (remaining > 0) {
-						printf("\nRX: ");
+						printf("TAP to DUT: ");
 						for (int i = 0; i < data.length; i++) {
 							printf("%02x", data.payload[i]);
 						}
-						printf("\n");
-						printf("from TAP to DUT, data.length = %d\n", data.length);
+						printf(" (%d bytes)\n", data.length);
 
 						state = DATA;
 					    last_beat = (data.length + 63) / 64 - 1;
@@ -221,6 +220,7 @@ public:
     }
 };
 
+/* forward packets from DUT to TAP queue */
 class TunTapTx : public SimElement {
 public:
     CData *_tlast;
@@ -256,9 +256,9 @@ public:
     }
 
     void init(){
-        *this->_tready = 1;
 		received = 0;
    		pthread_create(&txThreadTapId, NULL, &txThreadTapWork, this);
+        *this->_tready = 1;
     }
 
 	static void* txThreadTapWork(void *self){
@@ -266,7 +266,7 @@ public:
 		return NULL;
 	}
  
-	/* forward packets from TAP to queue */
+    /* forward packets from DUT to TAP queue */
 	void txThreadTap() {
 
 		int n;
@@ -294,21 +294,19 @@ public:
 		}
 		}
 
-		printf("Waiting for packet on AXIS queue\n");
 		while(1) {
 			struct packet p;
 			txMutex.lock();
 			if(!txQueue.empty()){
 				p = txQueue.front();
-				printf("TX from AXIS queue, length = %d\n", p.length);
 				txQueue.pop();
 				txMutex.unlock();
-				int sent = write(tapfd, &p.payload[0], p.length);
-				printf("\nTX: ");
+				printf("DUT to TAP: ");
 				for (int i = 0; i < p.length; i++) {
 					printf("%02x", p.payload[i]);
 				}
-				printf("\n");
+				printf(" (%d bytes)\n", p.length);
+				int sent = write(tapfd, &p.payload[0], p.length);
 				if (sent != p.length) {
 					printf("write(tap)=%d, but expected p.length%d\n", sent, p.length);
 					perror("write");
@@ -329,15 +327,15 @@ public:
     virtual void postCycle() {
 		// tx
 		if (*(this->_tvalid) && *(this->_tready)) {
-			printf("beat = %d incoming\n", beat + 1);
 			int tkeep_len = 0;
 			uint64_t tkeep = *(this->_tkeep);
-			printf("TKEEP = 0x%016llx, ", (unsigned long long)tkeep);
+			//printf("TKEEP = 0x%016llx, ", (unsigned long long)tkeep);
 			while (tkeep & 1) {
 				tkeep_len += 1;
 				tkeep >>= 1;
 			}
-			printf("tkeep_length = %d\n", tkeep_len);
+			//printf("tkeep_length = %d\n", tkeep_len);
+			printf("beat #%d %s, len=%d, DUT to TAP\n", beat + 1, *(this->_tvalid)? "(last) ":"", tkeep_len);
 			// j points indexes the data bytes in the packet data from queue
 			// i indexes the uint32_t word of _tdata[]
 			for (int i = 0, j = received; i < 16; i++, j += 4) {
@@ -352,20 +350,19 @@ public:
 					printf("Unexpected tkeep_len = %d as tlast = 0.\n", tkeep_len);
 				}
 				received += 64;
- 				printf("received = %d, non-last\n", received);
 			// TLAST = 1
 			} else {
 				received += tkeep_len;
 				data.length = received;
- 				printf("received = %d pushing into queue\n", received);
 				txMutex.lock();
 				txQueue.push(data);
 				txMutex.unlock();
 				received = 0;
+				// clear data for next iteration
 				for (int i = 0; i < 1538; i++) {
 					data.payload[i] = 0;
 				}
- 				printf("done\n");
+				data.length = 0;
 			}
 		}
     }
