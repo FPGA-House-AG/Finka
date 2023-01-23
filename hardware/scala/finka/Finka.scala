@@ -526,10 +526,11 @@ import spinal.sim._
   // packet rx clock domain
   val packetRx = new ClockingArea(rxClockDomain) {
     val packetRxAxi4SharedBus = Axi4Shared(busconfig)
+
     val sink = Stream(Fragment(CorundumFrame(corundumDataWidth)))
 
     // received on Ethernet port, going into SoC
-    val stash = CorundumFrameOutputStash(corundumDataWidth, 32, 24)
+    val stash = CorundumFrameFlowStash(corundumDataWidth, 32, 24)
     // drop when stash does not have room for a full packet
     val drop = !stash.io.sink.ready
     stash.io.sink << sink.throwWhen(drop)
