@@ -216,9 +216,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val jtag       = slave(Jtag())
 
     // AXI4 master towards an external AXI4 peripheral
-    //val extAxi4Master = master(Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false)))
-
-
+    val corundumAxi4Master = master(Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false)))
 
     // Peripherals IO
     val gpioA         = master(TriStateArray(32 bits))
@@ -326,10 +324,11 @@ import spinal.sim._
       println("[WARNING] Axi4SharedOnChipRam is NOT initialized.")
     }
 
-    val prefixAxi4SharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
-    val packetTxAxi4SharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
-    val packetRxAxi4SharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
-    val lookupAxi4SharedBus = interconnect.copy() //Axi4Shared(Axi4Config(32, 32, 2, useQos = false, useRegion = false))
+    val corundumAxi4SharedBus = interconnect.copy()
+    val prefixAxi4SharedBus = interconnect.copy()
+    val packetTxAxi4SharedBus = interconnect.copy()
+    val packetRxAxi4SharedBus = interconnect.copy()
+    val lookupAxi4SharedBus = interconnect.copy()
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
     val pcieAxi4SharedBus = pcieAxi4Bus.toShared()
@@ -382,10 +381,11 @@ import spinal.sim._
 
     axiCrossbar.addSlaves(
       ram.io.axi            -> (0x00800000L, onChipRamSize),
-      prefixAxi4SharedBus   -> (0x00C00000L, 4 kB),
+      corundumAxi4SharedBus -> (0x00C00000L, 4 kB),
       packetTxAxi4SharedBus -> (0x00C01000L, 4 kB),
       packetRxAxi4SharedBus -> (0x00C02000L, 4 kB),
       lookupAxi4SharedBus   -> (0x00C03000L, 4 kB),
+      prefixAxi4SharedBus   -> (0x00C04000L, 4 kB),
       apbBridge.io.axi      -> (0x00F00000L, 1 MB)
     )
 
@@ -395,8 +395,8 @@ import spinal.sim._
       // CPU instruction bus (read-only master) can only access RAM slave
       core.iBus         -> List(ram.io.axi),
       // CPU data bus can access all slaves
-      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus, lookupAxi4SharedBus),
-      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus, lookupAxi4SharedBus)
+      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus, lookupAxi4SharedBus),
+      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus, lookupAxi4SharedBus)
     )
 
     /* AXI Peripheral Bus (APB) slave */
@@ -405,6 +405,14 @@ import spinal.sim._
       crossbar.writeData.halfPipe() >> bridge.writeData
       crossbar.writeRsp             << bridge.writeRsp
       crossbar.readRsp              << bridge.readRsp
+    })
+
+    /* corundum slave */
+    axiCrossbar.addPipelining(corundumAxi4SharedBus)((crossbar, ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <<  ctrl.writeRsp
+      crossbar.readRsp               <<  ctrl.readRsp
     })
 
     /* prefix update slave */
@@ -460,7 +468,7 @@ import spinal.sim._
     axiCrossbar.addPipelining(pcieAxi4SharedBus)((pcie, crossbar) => {
       pcie.sharedCmd             >>  crossbar.sharedCmd
       pcie.writeData             >/->  crossbar.writeData
-      pcie.writeRsp              <<  crossbar.writeRsp
+      pcie.writeRsp              <-/<  crossbar.writeRsp
       pcie.readRsp               <-/<  crossbar.readRsp
     })
 
@@ -552,7 +560,7 @@ import spinal.sim._
   // connect AXIS RX from Finka to Corundum
   io.m_axis_tx << packetTx.packetWriter.io.output
 
-  // bring axi.packetTxAxi4SharedBus into packetRx clock domain
+  // bring axi.packetTxAxi4SharedBus into txClockDomain clock domain
   // and from Shared to Full bus because BusControllerFactory does not support Axi4Shared?
   val axi2packetTxCDC = Axi4SharedCC(busconfig, axiClockDomain, txClockDomain, 2, 2, 2, 2)
   axi2packetTxCDC.io.input << axi.packetTxAxi4SharedBus
@@ -569,10 +577,11 @@ import spinal.sim._
   // if we keep adding CDCs here, maybe one CDC to a 2nd crossbar inside
   // the packetRx clock domain?
 
-  io.gpioA          <> axi.gpioACtrl.io.gpio
-  io.timerExternal  <> axi.timerCtrl.io.external
-  io.uart           <> axi.uartCtrl.io.uart
-  io.pcieAxi4Slave  <> axi.pcieAxi4Bus
+  io.gpioA              <> axi.gpioACtrl.io.gpio
+  io.timerExternal      <> axi.timerCtrl.io.external
+  io.uart               <> axi.uartCtrl.io.uart
+  io.pcieAxi4Slave      <> axi.pcieAxi4Bus
+  io.corundumAxi4Master <> axi.corundumAxi4SharedBus.toAxi4()
 
   io.commit := prefix.commit
   io.update := prefix.update
@@ -583,10 +592,32 @@ import spinal.sim._
   // Do more renaming
   private def renameFinkaIO(): Unit = {
     io.flatten.foreach(bt => {
+      if(bt.getName().contains("_aw_tvalid")) bt.setName(bt.getName().replace("_aw_tvalid", "_awvalid"))
+      if(bt.getName().contains("_ar_tvalid")) bt.setName(bt.getName().replace("_ar_tvalid", "_arvalid"))
+      if(bt.getName().contains("_w_tvalid")) bt.setName(bt.getName().replace("_w_tvalid", "_wvalid"))
+      if(bt.getName().contains("_b_tvalid")) bt.setName(bt.getName().replace("_b_tvalid", "_bvalid"))
+      if(bt.getName().contains("_r_tvalid")) bt.setName(bt.getName().replace("_r_tvalid", "_rvalid"))
+      if(bt.getName().contains("_aw_tready")) bt.setName(bt.getName().replace("_aw_tready", "_awready"))
+      if(bt.getName().contains("_ar_tready")) bt.setName(bt.getName().replace("_ar_tready", "_arready"))
+      if(bt.getName().contains("_w_tready")) bt.setName(bt.getName().replace("_w_tready", "_wready"))
+      if(bt.getName().contains("_b_tready")) bt.setName(bt.getName().replace("_b_tready", "_bready"))
+      if(bt.getName().contains("_r_tready")) bt.setName(bt.getName().replace("_r_tready", "_rready"))
+      if(bt.getName().contains("_aw_tlast")) bt.setName(bt.getName().replace("_aw_tlast", "_awlast"))
+      if(bt.getName().contains("_ar_tlast")) bt.setName(bt.getName().replace("_ar_tlast", "_arlast"))
+      if(bt.getName().contains("_w_tlast")) bt.setName(bt.getName().replace("_w_tlast", "_wlast"))
+      if(bt.getName().contains("_b_tlast")) bt.setName(bt.getName().replace("_b_tlast", "_blast"))
+      if(bt.getName().contains("_r_tlast")) bt.setName(bt.getName().replace("_r_tlast", "_rlast"))
+      if(bt.getName().contains("_aw_")) bt.setName(bt.getName().replace("_aw_", "_aw"))
+      if(bt.getName().contains("_ar_")) bt.setName(bt.getName().replace("_ar_", "_ar"))
+      if(bt.getName().contains("_w_")) bt.setName(bt.getName().replace("_w_", "_w"))
+      if(bt.getName().contains("_b_")) bt.setName(bt.getName().replace("_b_", "_b"))
+      if(bt.getName().contains("_r_")) bt.setName(bt.getName().replace("_r_", "_r"))
       if(bt.getName().contains("pcieAxi4Slave_")) bt.setName(bt.getName().replace("pcieAxi4Slave_", "pcie_axi_"))
+      if(bt.getName().contains("corundumAxi4Master_")) bt.setName(bt.getName().replace("corundumAxi4Master_", "xbar_axi_"))
     })
   }
-
+  //Axi4SpecRenamer(io.corundumAxi4Master)
+  //Axi4SpecRenamer(io.pcieAxi4Slave)
 
   // Execute the function renameAxiIO after the creation of the component
   addPrePopTask(() => renameFinkaIO())
@@ -600,6 +631,7 @@ object Finka {
       toplevel
     })
     verilog.printPruned()
+
     val vhdl = Config.spinal.generateVhdl({
       val toplevel = new Finka(FinkaConfig.default)
       toplevel
@@ -619,6 +651,35 @@ object FinkaWithMemoryInit{
       toplevel
     })
     //verilog.printPruned()
+
+    // BEGIN: TRY TO EXTRACT XDC FOR CROSS_CLOCKING - LEON
+    verilog.toplevel.walkComponents{ c =>
+      c.dslBody.walkDeclarations{
+        case signal : Bits => {
+
+ //crossClockGrayTag(val pushClock: ClockDomain, val popClock: ClockDomain) extends SpinalTag
+  //.addTag(new crossClockGrayTag(ClockDomain.current.readClockWire,
+
+          signal.getTag(classOf[crossClockGrayTag]) match {
+            case Some(tag) =>  println(s"$signal from ${tag.pushClock.readClockWire} to ${tag.popClock.readClockWire} !!!!")
+            case None =>
+          }
+        }
+        case _ =>
+      }
+    }
+
+    //    case bt: BaseType => {
+    //      if (bt.isReg && (bt.hasTag(crossClockDomain) || bt.hasTag(crossClockBuffer))) {
+    //        bt.addAttribute("async_reg", "true")
+    //      }
+    //    }
+    // END: TRY TO EXTRACT XDC FOR CROSS_CLOCKING - LEON
+
+
+
+
+
   }
 }
 
@@ -651,8 +712,9 @@ object FinkaSim {
     val simSlowDown = false
     val socConfig = FinkaConfig.default.copy(
       corundumDataWidth = 128,
-      onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
+      //onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
       //onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
+      onChipRamHexFile = "../wg_lwip/build-riscv/echop.hex"
     )
 
     val simConfig = SimConfig
@@ -664,6 +726,7 @@ object FinkaSim {
     //.withXSim.withXilinxDevice("xcvu35p-fsvh2104-2-e")
     // LD_LIBRARY_PATH=/opt/Xilinx//Vivado/2021.2/lib/lnx64.o stdbuf -oL -eL sbt "runMain finka.FinkaSim"
 
+    // !! set to true to generate a wavefrom dump for GTKWave -f 
     val waveform = false
     if (waveform) simConfig.withFstWave//.withWaveDepth(10) // does not work with Verilator, use SimTimeout()
 
@@ -693,7 +756,7 @@ object FinkaSim {
       axiClockDomain.forkStimulus(clkPeriod)
 
       // stop after 1M clocks to prevent disk wearout
-      if (waveform) SimTimeout(100000 * clkPeriod)
+      //if (waveform) SimTimeout(100000 * clkPeriod)
 
       val rxClockDomain = ClockDomain(dut.io.rx_clk, dut.io.rx_rst)
       rxClockDomain.forkStimulus(packetClkPeriod)
@@ -728,7 +791,7 @@ object FinkaSim {
       //dut.rxClockDomain.waitSampling(1)
       //dut.axiClockDomain.waitSampling(1)
 
-        rxClockDomain.waitRisingEdge(40)
+      rxClockDomain.waitRisingEdge(40)
 
 if (false) {
       // push one word in stream
@@ -772,7 +835,10 @@ dut.io.m_axis_tx.ready #= true
 
       // packet generator
       val sendThread = fork {
-        val payload =
+
+        //ffffffffffffaabbcc11111108060001080006040001aabbcc111111c0a8ff01000000000000c0a8ff02
+
+        val payload_wg4 =
         // <-------- Ethernet header --------------> <-IPv4 header IHL=5 protocol=0x11->                         <--5555,5555,len0x172-> <----Wireguard Type 4 ------------------------> < L a  d  i  e  s
           "01 02 03 04 05 06 01 02 03 04 05 06 08 00 45 11 22 33 44 55 66 77 88 11 00 00 00 00 00 00 00 00 00 00 15 b3 15 b3 01 72 00 00 04 00 00 00 11 22 33 44 c1 c2 c3 c4 c5 c6 c7 c8 4c 61 64 69 65 73 " +
         //  a  n  d     G  e  n  t  l  e  m  e  n     o  f     t  h  e     c  l  a  s  s     o  f     '  9  9  :     I  f     I     c  o  u  l  d     o  f  f  e  r     y  o  u     o  n  l  y     o  n
@@ -780,17 +846,22 @@ dut.io.m_axis_tx.ready #= true
         //  e     t  i  p     f  o  r     t  h  e     f  u  t  u  r  e  ,     s  u  n  s  c  r  e  e  n     w  o  u  l  d     b  e     i  t  . <---------- Poly 1305 Tag (16 bytes) --------->
           "65 20 74 69 70 20 66 6f 72 20 74 68 65 20 66 75 74 75 72 65 2c 20 73 75 6e 73 63 72 65 65 6e 20 77 6f 75 6c 64 20 62 65 20 69 74 2e 13 05 13 05 13 05 13 05 13 05 13 05 13 05 13 05 00 00 00 00 "
 
+        val payload = "ffffffffffffaabbcc11111108060001080006040001aabbcc111111c0a8ff01000000000000c0a8ff02"
+
         /* create a List of Arrays */
-        val words = payload.split(" ").grouped(dut.config.corundumDataWidth/8)
+        val hexstring = payload.filterNot(_.isWhitespace)
+        val packet_length = hexstring.size / 2/*nibbles per byte*/;
+        val words = hexstring.grouped(2/*nibbles per byte*/).grouped(dut.config.corundumDataWidth/8)
         var strs  = new ListBuffer[BigInt]()
         words.zipWithIndex.foreach {
           case (word, count) => {
-            //printf("%s\n", word/*.reverse.*/.mkString(""))
+            printf("%s\n", word/*.reverse.*/.mkString(""))
             //printf("%s\n", word.reverse.mkString(""))
             strs += BigInt(word.reverse.mkString(""), 16)
           }
         }
         val plaintext = strs.toList
+        printf("packet_length = %d, number of words = %d", packet_length, plaintext.size)
 
         // 64 - 6 = 58 bytes for all headers
         // 3 * 64 bytes - 4 = 188 bytes for full Ethernet packet (as above)
@@ -808,9 +879,12 @@ dut.io.m_axis_tx.ready #= true
         var tkeep0 = BigInt(0)
         var pause = false
 
+        dut.txClockDomain.waitSamplingWhere(dut.io.m_axis_tx.ready.toBoolean & dut.io.m_axis_tx.valid.toBoolean)
+        printf("Saw packet from DUT\n");
+
         var sent = 0
         while (sent < 1) {
-          var packet_length = 3 * 64 - 4 // = 188 bytes
+          //var packet_length = 3 * 64 - 4 // = 188 bytes
           var remaining = packet_length
 
           var word_index = 0
