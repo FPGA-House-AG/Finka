@@ -29,7 +29,7 @@ import spinal.core.sim.{SimPublic, TracingOff}
 import spinal.lib.com.uart.{Apb3UartCtrl, Uart, UartCtrlGenerics, UartCtrlMemoryMappedConfig}
 import spinal.lib.io.TriStateArray
 import spinal.lib.misc.HexTools
-import spinal.lib.soc.pinsec.{PinsecTimerCtrl, PinsecTimerCtrlExternal}
+//import spinal.lib.soc.pinsec.{FinkaTimerCtrl, FinkaTimerCtrlExternal}
 import spinal.lib.system.debugger.{JtagAxi4SharedDebugger, JtagBridge, SystemDebugger, SystemDebuggerConfig}
 
 import spinal.lib.bus.misc.SizeMapping
@@ -204,14 +204,6 @@ class Finka(val config: FinkaConfig) extends Component{
     val clk     = in Bool()
     val rst     = in Bool()
 
-    // AXI4 Streaming Receive
-    val rx_clk   = in Bool()
-    val rx_rst   = in Bool()
-
-    // AXI4 Streaming Transmit
-    val tx_clk   = in Bool()
-    val tx_rst   = in Bool()
-
     // Main components IO
     val jtag       = slave(Jtag())
 
@@ -221,7 +213,7 @@ class Finka(val config: FinkaConfig) extends Component{
     // Peripherals IO
     val gpioA         = master(TriStateArray(32 bits))
     val uart          = master(Uart())
-    val timerExternal = in(PinsecTimerCtrlExternal())
+    val timerExternal = in(FinkaTimerCtrlExternal())
     val coreInterrupt = in Bool()
 
     /* register interface to IP address lookup update interface */
@@ -275,7 +267,6 @@ import spinal.sim._
     //Create all reset used later in the design
     //val systemReset  = RegNext(io.rst) //simPublic()
     val axiReset     = RegNext(io.rst).simPublic()
-    val rxReset  = RegNext(io.rx_rst).simPublic()
   }
 
   val axiClockDomain = ClockDomain(
@@ -290,18 +281,6 @@ import spinal.sim._
     clock = io.clk,
     reset = io.rst,
     frequency = FixedFrequency(axiFrequency)
-  )
-
-  val rxClockDomain = ClockDomain(
-    clock = io.rx_clk,
-    reset = io.rx_rst,
-    config = Config.syncConfig
-  )
-
-  val txClockDomain = ClockDomain(
-    clock = io.tx_clk,
-    reset = io.tx_rst,
-    config = Config.syncConfig
   )
 
   val busconfig = Axi4Config(32, 32, 2, useQos = false, useRegion = false)
@@ -347,7 +326,7 @@ import spinal.sim._
       gpioWidth = 32,
       withReadSync = true
     )
-    val timerCtrl = PinsecTimerCtrl()
+    val timerCtrl = FinkaTimerCtrl()
 
     val uartCtrl = Apb3UartCtrl(uartCtrlConfig)
     uartCtrl.io.apb.addAttribute(Verilator.public)
@@ -366,7 +345,7 @@ import spinal.sim._
         case plugin : DBusSimplePlugin => dBus = plugin.dBus.toAxi4Shared()
         case plugin : DBusCachedPlugin => dBus = plugin.dBus.toAxi4Shared(true/*stageCmd required (?)*/)
         case plugin : CsrPlugin        => {
-          plugin.externalInterrupt := BufferCC(io.coreInterrupt)
+          plugin.externalInterrupt := io.coreInterrupt //BufferCC(io.coreInterrupt)
           plugin.timerInterrupt := timerCtrl.io.interrupt
         }
         case plugin : DebugPlugin      => plugin.debugClockDomain{
@@ -483,12 +462,12 @@ import spinal.sim._
       )
     )
 
-    val lookupTable = LookupMemAxi4(33, 128, busconfig, rxClockDomain)
+    val lookupTable = LookupMemAxi4(33, 128, busconfig, axiClockDomain)
     lookupTable.io.ctrlbus << lookupAxi4SharedBus.toAxi4()
     //val x =  Axi4SharedToBram(addressAxiWidth = 8, addressBRAMWidth = 8, dataWidth = 32, idWidth = 0)
   }
 
-  val prefix = new ClockingArea(rxClockDomain) {
+  val prefix = new ClockingArea(axiClockDomain) {
     val prefixAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
   
     val ctrl = new Axi4SlaveFactory(prefixAxi4Bus)
@@ -517,7 +496,7 @@ import spinal.sim._
   io.update6 := prefix.regs(6)
   io.do_update := prefix.do_update
 
-  val lookupRxSessionID = new ClockingArea(rxClockDomain) {
+  val lookupRxSessionID = new ClockingArea(axiClockDomain) {
 
     val counter = Reg(U(0, 6 bits))
 
@@ -531,8 +510,8 @@ import spinal.sim._
     counter := counter + 1
   }
 
-  // packet rx clock domain
-  val packetRx = new ClockingArea(rxClockDomain) {
+  // packet rx area
+  val packetRx = new ClockingArea(axiClockDomain) {
     val packetRxAxi4SharedBus = Axi4Shared(busconfig)
 
     val sink = Stream(Fragment(CorundumFrame(corundumDataWidth)))
@@ -551,8 +530,8 @@ import spinal.sim._
   // connect AXIS RX from Corundum to Finka
   io.s_axis_rx >> packetRx.sink
 
-  // packet tx clock domain
-  val packetTx = new ClockingArea(txClockDomain) {
+  // packet tx area
+  val packetTx = new ClockingArea(axiClockDomain) {
     val packetTxAxi4SharedBus = Axi4Shared(busconfig)
     val packetWriter = CorundumFrameWriterAxi4(corundumDataWidth, busconfig)
     packetWriter.io.ctrlbus << packetTxAxi4SharedBus.toAxi4()
@@ -560,22 +539,9 @@ import spinal.sim._
   // connect AXIS RX from Finka to Corundum
   io.m_axis_tx << packetTx.packetWriter.io.output
 
-  // bring axi.packetTxAxi4SharedBus into txClockDomain clock domain
-  // and from Shared to Full bus because BusControllerFactory does not support Axi4Shared?
-  val axi2packetTxCDC = Axi4SharedCC(busconfig, axiClockDomain, txClockDomain, 2, 2, 2, 2)
-  axi2packetTxCDC.io.input << axi.packetTxAxi4SharedBus
-  packetTx.packetTxAxi4SharedBus << axi2packetTxCDC.io.output//.toAxi4()
-
-  val axi2packetRxCDC = Axi4SharedCC(busconfig, axiClockDomain, rxClockDomain, 2, 2, 2, 2)
-  axi2packetRxCDC.io.input << axi.packetRxAxi4SharedBus
-  packetRx.packetRxAxi4SharedBus << axi2packetRxCDC.io.output//.toAxi4()
-
-  val axi2prefixCDC = Axi4SharedCC(busconfig, axiClockDomain, rxClockDomain, 2, 2, 2, 2)
-  axi2prefixCDC.io.input << axi.prefixAxi4SharedBus
-  prefix.prefixAxi4Bus << axi2prefixCDC.io.output.toAxi4()
-
-  // if we keep adding CDCs here, maybe one CDC to a 2nd crossbar inside
-  // the packetRx clock domain?
+  packetTx.packetTxAxi4SharedBus << axi.packetTxAxi4SharedBus
+  packetRx.packetRxAxi4SharedBus << axi.packetRxAxi4SharedBus
+  prefix.prefixAxi4Bus << axi.prefixAxi4SharedBus.toAxi4()
 
   io.gpioA              <> axi.gpioACtrl.io.gpio
   io.timerExternal      <> axi.timerCtrl.io.external
@@ -736,7 +702,6 @@ object FinkaSim {
       // expose internal signals
       //dut.resetCtrl.systemReset.simPublic()
       dut.resetCtrl.axiReset.simPublic()
-      dut.resetCtrl.rxReset.simPublic()
 
       /* return dut */
       dut
@@ -757,12 +722,6 @@ object FinkaSim {
 
       // stop after 1M clocks to prevent disk wearout
       //if (waveform) SimTimeout(100000 * clkPeriod)
-
-      val rxClockDomain = ClockDomain(dut.io.rx_clk, dut.io.rx_rst)
-      rxClockDomain.forkStimulus(packetClkPeriod)
-
-      val txClockDomain = ClockDomain(dut.io.tx_clk, dut.io.tx_rst)
-      txClockDomain.forkStimulus(packetClkPeriod)
 
       val tcpJtag = JtagTcp(
         jtag = dut.io.jtag,
@@ -788,10 +747,8 @@ object FinkaSim {
       // run 0.1 second after done
       var cycles_post = 100000
 
-      //dut.rxClockDomain.waitSampling(1)
-      //dut.axiClockDomain.waitSampling(1)
 
-      rxClockDomain.waitRisingEdge(40)
+      axiClockDomain.waitRisingEdge(40)
 
 if (false) {
       // push one word in stream
@@ -800,13 +757,13 @@ if (false) {
       dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
       dut.io.s_axis_rx.payload.last #= false
       dut.io.s_axis_rx.valid #= true
-      dut.rxClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+      dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
       dut.io.s_axis_rx.payload.last #= false
       dut.io.s_axis_rx.valid #= true
-      dut.rxClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+      dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
       dut.io.s_axis_rx.payload.last #= true
       dut.io.s_axis_rx.valid #= true
-      dut.rxClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+      dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
       dut.io.s_axis_rx.valid #= false
 
       // push one word in stream
@@ -815,16 +772,11 @@ if (false) {
       dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
       dut.io.s_axis_rx.payload.last #= true
       dut.io.s_axis_rx.valid #= true
-      dut.rxClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+      dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
       dut.io.s_axis_rx.valid #= false
 }
 
 dut.io.m_axis_tx.ready #= true
-
-      //val readyThread = fork {
-      //      dut.rxClockDomain.waitRisingEdge()
-      //      dut.io.m_axis_tx.ready #= (Random.nextInt(8) > 2)
-      //}
 
       //val monitorResetsThread = fork {
       //  if (dut.resetCtrl.axiReset.toBoolean == true) {
@@ -879,7 +831,7 @@ dut.io.m_axis_tx.ready #= true
         var tkeep0 = BigInt(0)
         var pause = false
 
-        dut.txClockDomain.waitSamplingWhere(dut.io.m_axis_tx.ready.toBoolean & dut.io.m_axis_tx.valid.toBoolean)
+        dut.axiClockDomain.waitSamplingWhere(dut.io.m_axis_tx.ready.toBoolean & dut.io.m_axis_tx.valid.toBoolean)
         printf("Saw packet from DUT\n");
 
         var sent = 0
@@ -916,7 +868,7 @@ dut.io.m_axis_tx.ready #= true
             //dut.io.source.ready #= (Random.nextInt(8) > 1)
 
             // Wait a rising edge on the clock
-            dut.rxClockDomain.waitRisingEdge()
+            dut.axiClockDomain.waitRisingEdge()
 
             dut.io.s_axis_rx.valid #= false
 
@@ -975,7 +927,7 @@ dut.io.m_axis_tx.ready #= true
           printf(s"M_AXIS_TX TKEEP == 0x%0${kw}X\n", dut.io.m_axis_tx.payload.tkeep.toBigInt)
         }
 
-        rxClockDomain.waitRisingEdge()
+        axiClockDomain.waitRisingEdge()
 
         if (commits_seen > 4) cycles_post -= 1
         if (cycles_post == 0) simSuccess()
