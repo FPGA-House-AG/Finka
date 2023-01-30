@@ -3,7 +3,7 @@
 PROJ_NAME=pico-hello
 DEBUG=yes
 BENCH=no
-MULDIV=no
+MULDIV=yes
 
 # "I"   Base Integer Instruction Set
 # "M" Standard Extension for Integer Multiplication and Divison
@@ -37,6 +37,7 @@ endif
 ifeq ($(COMPRESSED),yes)
 	MARCH := $(MARCH)ac
 endif
+MARCH := $(MARCH)_zicsr
 
 CFLAGS += -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG
 LDFLAGS += -march=$(MARCH)  -mabi=$(MABI)
@@ -144,6 +145,22 @@ debug: $(OBJDIR)/$(PROJ_NAME).elf
 	-ex "cont" \
 	$(OBJDIR)/$(PROJ_NAME).elf
 
+debug_u50: $(OBJDIR)/$(PROJ_NAME).elf
+	$(RISCV_GDB) --quiet \
+	-ex "set pagination off" \
+	-ex "set remotetimeout 30" \
+	-ex "target extended-remote 192.168.1.50:3333"  \
+	-ex "set arch riscv:rv32" \
+	-ex "monitor reset halt" \
+	-ex "layout split" \
+	-ex "load" \
+	-ex "echo \\n" \
+	-ex "echo \\n" \
+	-ex "break main" \
+	-ex "x/4i 0x800000" \
+	-ex "cont" \
+	$(OBJDIR)/$(PROJ_NAME).elf
+
 #	-ex "cont" \
 #	-ex "cont" \
 #	-ex "cont" \
@@ -165,12 +182,12 @@ debug: $(OBJDIR)/$(PROJ_NAME).elf
 
 # Debug the program using GDB, which starts OpenOCD (VexRiscv) with GDB pipe
 batch_debug: $(OBJDIR)/$(PROJ_NAME).elf
-	$(RISCV_GDB) --batch \
-	-ex "set remotetimeout 30" \
+	$(RISCV_GDB) --quiet --batch \
+	-ex "set pagination off" \
 	-ex "target extended-remote | $(OPENOCD) -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ../../../../cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./finka.cfg\""  \
+	-ex "set remotetimeout 5" \
 	-ex "set arch riscv:rv32" \
 	-ex "monitor reset halt" \
-	-ex "set pagination off" \
 	-ex "load" \
 	-ex "x/4i 0x800000" \
 	-ex "cont" \
