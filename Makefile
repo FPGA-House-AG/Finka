@@ -21,8 +21,8 @@ sim_batch_debug:
 	# @TODO maybe do not rely on log, but on netstat -tln | grep port?
 	tail -F -n +1 sbt.log | sed '/WAITING FOR TCP JTAG CONNECTION/ q' > /dev/null
 	echo "Starting GDB/OpenOCD"
-	make -C software/c/finka/hello_world   batch_debug    DEBUG=yes
-	#make -C software/c/finka/pico-hello   batch_debug    DEBUG=yes
+	#make -C software/c/finka/hello_world   batch_debug    DEBUG=yes
+	make -C software/c/finka/pico-hello   batch_debug    DEBUG=yes
 
 # build program for SoC, and RTL of SoC
 rtl:
@@ -32,7 +32,8 @@ rtl:
 	make -j8 -C software/c/finka/pico-hello clean
 	make -j8 -C software/c/finka/pico-hello clean all DEBUG=yes
 	# runMain finka.LookupMemAxi4Verilog;
-	sbt "runMain finka.FinkaWithMemoryInit; runMain finka.FinkaWireguard"
+	sbt "runMain finka.FinkaWithMemoryInit;"
+	#runMain finka.FinkaWireguard"
 
 wg:
 	set -e
