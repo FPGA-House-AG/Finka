@@ -6,7 +6,10 @@ import spinal.lib.bus.amba3.apb.{Apb3SlaveFactory, Apb3Config, Apb3}
 import spinal.lib.misc.{InterruptCtrl, Timer, Prescaler}
 
 /*
- * Based on FinkaTimerCtrl in SpinalHDL, but with BufferCC and Timers B,C,D removed
+ * Based on Pinsec TimerCtrl in SpinalHDL library
+ * - changed prescaler to 20 bits
+ * - removed BufferCC on tick input
+ * - removed Timers B, C and D
  */
 object FinkaTimerCtrl{
   def getApb3Config() = new Apb3Config(
@@ -26,15 +29,19 @@ case class FinkaTimerCtrl() extends Component {
     val external = in(FinkaTimerCtrlExternal())
     val interrupt = out Bool()
   }
-  val prescaler = Prescaler(16)
+  val prescaler = Prescaler(20)
   val timerA = Timer(32)
 
   val busCtrl = Apb3SlaveFactory(io.apb)
   val prescalerBridge = prescaler.driveFrom(busCtrl, 0x00)
 
   val timerABridge = timerA.driveFrom(busCtrl, 0x40)(
+    /* bit 0 indicates tick at every clock, bit 1 enables tick at prescaler overflow */
     ticks  = List(True, prescaler.io.overflow),
     clears = List(timerA.io.full)
+    /* This initialization will run the timer from the prescaler input:
+     *   CLRsTCKs 
+     * 0x00010002 */
   )
 
   val interruptCtrl = InterruptCtrl(1)

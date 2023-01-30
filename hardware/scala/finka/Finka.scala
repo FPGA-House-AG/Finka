@@ -190,11 +190,6 @@ object FinkaConfig{
 
 class Finka(val config: FinkaConfig) extends Component{
 
-  //Legacy constructor
-  //def this(axiFrequency: HertzNumber) {
-  //  this(FinkaConfig.default.copy(axiFrequency = axiFrequency))
-  //}
-
   import config._
   val debug = true
   val interruptCount = 4
@@ -208,7 +203,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val jtag       = slave(Jtag())
 
     // AXI4 master towards an external AXI4 peripheral
-    val corundumAxi4Master = master(Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false)))
+    val corundumAxi4Master = master(Axi4(Axi4Config(32, 32, 2, useLock = false, useQos = false, useRegion = false)))
 
     // Peripherals IO
     val gpioA         = master(TriStateArray(32 bits))
@@ -251,7 +246,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val systemResetUnbuffered = False
     //    val coreResetUnbuffered = False
 
-    //Implement an counter to keep the reset axiResetOrder high 64 cycles
+    //Implement a counter to keep the reset axiResetOrder high 64 cycles
     // Also this counter will automaticly do a reset when the system boot.
     val systemResetCounter = Reg(UInt(6 bits)) init(0)
     when(systemResetCounter =/= U(systemResetCounter.range -> true)){
@@ -261,8 +256,6 @@ class Finka(val config: FinkaConfig) extends Component{
     //when(BufferCC(io.asyncReset)){
     //  systemResetCounter := 0
     //}
-import spinal.core.sim._
-import spinal.sim._
 
     //Create all reset used later in the design
     //val systemReset  = RegNext(io.rst) //simPublic()
@@ -283,7 +276,7 @@ import spinal.sim._
     frequency = FixedFrequency(axiFrequency)
   )
 
-  val busconfig = Axi4Config(32, 32, 2, useQos = false, useRegion = false)
+  val busconfig = Axi4Config(32, 32, 2, useLock = false, useQos = false, useRegion = false)
   // interconnect is an AXI4 Shared AW/AR bus (SpinalHDL specific)
   val interconnect = Axi4Shared(busconfig)
 
@@ -360,6 +353,7 @@ import spinal.sim._
 
     axiCrossbar.addSlaves(
       ram.io.axi            -> (0x00800000L, onChipRamSize),
+      // @NOTE keep finka.h in sync for software
       corundumAxi4SharedBus -> (0x00C00000L, 4 kB),
       packetTxAxi4SharedBus -> (0x00C01000L, 4 kB),
       packetRxAxi4SharedBus -> (0x00C02000L, 4 kB),
@@ -468,7 +462,7 @@ import spinal.sim._
   }
 
   val prefix = new ClockingArea(axiClockDomain) {
-    val prefixAxi4Bus = Axi4(Axi4Config(32, 32, 2, useQos = false, useRegion = false/*, useStrb = false*/))
+    val prefixAxi4Bus = Axi4(Axi4Config(32, 32, 2, useLock = false, useQos = false, useRegion = false/*, useStrb = false*/))
   
     val ctrl = new Axi4SlaveFactory(prefixAxi4Bus)
     val reg_idx = ((ctrl.writeAddress & 0xFFF) / 4)
@@ -610,8 +604,9 @@ object FinkaWithMemoryInit{
   def main(args: Array[String]) {
     val config = Config.spinal
     val verilog = config.generateVerilog({
-      val socConfig = FinkaConfig.default.copy(onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex")
-      //.copy(onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex")
+      val socConfig = FinkaConfig.default
+      //.copy(onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex")
+      .copy(onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex")
       val toplevel = new Finka(socConfig)
       // return this
       toplevel
@@ -716,6 +711,9 @@ object FinkaSim {
       val uartBaudPeriod =  (1e12 / uartBaudRate).toLong
 
       dut.io.s_axis_rx.valid #= false
+
+      dut.io.timerExternal.clear #= true
+      dut.io.timerExternal.tick #= true
 
       val axiClockDomain = ClockDomain(dut.io.clk, dut.io.rst)
       axiClockDomain.forkStimulus(clkPeriod)
