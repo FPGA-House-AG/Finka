@@ -259,7 +259,7 @@ class Finka(val config: FinkaConfig) extends Component{
 
     //Create all reset used later in the design
     //val systemReset  = RegNext(io.rst) //simPublic()
-    val axiReset     = RegNext(io.rst).simPublic()
+    val axiReset     = RegNext(io.rst) //.simPublic()
   }
 
   val axiClockDomain = ClockDomain(
@@ -508,20 +508,27 @@ class Finka(val config: FinkaConfig) extends Component{
   val packetRx = new ClockingArea(axiClockDomain) {
     val packetRxAxi4SharedBus = Axi4Shared(busconfig)
 
+    // TDATA+TKEEP Ethernet frame from Corundum
     val sink = Stream(Fragment(CorundumFrame(corundumDataWidth)))
 
-    // received on Ethernet port, going into SoC
+    // drop when flow stash cannot accept a full packet (without backpressure)
+    val dropOnFull = CorundumFrameDrop(corundumDataWidth)
+    dropOnFull.io.sink << sink
+
+    // ready asserted during packet input, !ready if no room for full packet
     val stash = CorundumFrameFlowStash(corundumDataWidth, 32, 24)
-    // drop when stash does not have room for a full packet
-    val drop = !stash.io.sink.ready
-    stash.io.sink << sink.throwWhen(drop)
+    stash.io.sink << dropOnFull.io.source
+    // drop packets when the FlowStash applies backpressure
+    dropOnFull.io.drop := !stash.io.sink.ready
+
+    // convert from AXIS to AXIMM, CPU can read AXIS words
     val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
     packetReader.io.input << stash.io.source
 
     // connect to bus
     packetReader.io.ctrlbus << packetRxAxi4SharedBus.toAxi4()
   }
-  // connect AXIS RX from Corundum to Finka
+  // connect AXIS RX from Corundum to Finka RX path
   io.s_axis_rx >> packetRx.sink
 
   // packet tx area
@@ -612,35 +619,6 @@ object FinkaWithMemoryInit{
       toplevel
     })
     //verilog.printPruned()
-
-    // BEGIN: TRY TO EXTRACT XDC FOR CROSS_CLOCKING - LEON
-    verilog.toplevel.walkComponents{ c =>
-      c.dslBody.walkDeclarations{
-        case signal : Bits => {
-
- //crossClockGrayTag(val pushClock: ClockDomain, val popClock: ClockDomain) extends SpinalTag
-  //.addTag(new crossClockGrayTag(ClockDomain.current.readClockWire,
-
-          signal.getTag(classOf[crossClockGrayTag]) match {
-            case Some(tag) =>  println(s"$signal from ${tag.pushClock.readClockWire} to ${tag.popClock.readClockWire} !!!!")
-            case None =>
-          }
-        }
-        case _ =>
-      }
-    }
-
-    //    case bt: BaseType => {
-    //      if (bt.isReg && (bt.hasTag(crossClockDomain) || bt.hasTag(crossClockBuffer))) {
-    //        bt.addAttribute("async_reg", "true")
-    //      }
-    //    }
-    // END: TRY TO EXTRACT XDC FOR CROSS_CLOCKING - LEON
-
-
-
-
-
   }
 }
 
@@ -674,8 +652,8 @@ object FinkaSim {
     val socConfig = FinkaConfig.default.copy(
       corundumDataWidth = 128,
       //onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
-      //onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
-      onChipRamHexFile = "../wg_lwip/build-riscv/echop.hex"
+      onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
+      //onChipRamHexFile = "../wg_lwip/build-riscv/echop.hex"
     )
 
     val simConfig = SimConfig
@@ -744,7 +722,6 @@ object FinkaSim {
       var commits_seen = 0
       // run 0.1 second after done
       var cycles_post = 100000
-
 
       axiClockDomain.waitRisingEdge(40)
 
