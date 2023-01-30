@@ -63,8 +63,8 @@ void main() {
   uart_applyConfig(UART, &uart_cfg);
   int count = 0;
 
-  *((volatile uint32_t *)AXI_M1 + 0x3000/4) = 0xDEADBEEFu;
-  *((volatile uint32_t *)AXI_M1 + 0x3004/4) = 0xCAFEBABEu;
+  //*((volatile uint32_t *)AXI_M1 + 0x3000/4) = 0xDEADBEEFu;
+  //*((volatile uint32_t *)AXI_M1 + 0x3004/4) = 0xCAFEBABEu;
 
   putc('X', stdin);
 #if 0
@@ -78,12 +78,11 @@ void main() {
   // 1 microsecond ticks to timers
   TIMER_PRESCALER->LIMIT = 250 - 1;
   timer_init(TIMER_A);
-  while (count < 200) {
-    //printf("hello world from pico-hello! %u\n", *((volatile uint32_t *)(&(TIMER_A->VALUE))));
-    printf("hello world from pico-hello! %u\n", TIMER_A->VALUE);
+  while (1) { 
+    printf("Hello world, from pico-hello! %u\n", TIMER_A->VALUE);
     count += 2;
   }
 }
 
-void _cirqhandler(){
+void _cirqhandler() {
 }
