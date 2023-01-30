@@ -18,10 +18,10 @@
             // does not work, use file in "autorun" settings (below) instead
             //"executable": "${workspaceFolder}/software/c/finka/hello_world/build/hello_world.elf",
             //"executable": "${workspaceFolder}/software/c/finka/pico-hello/build/pico-hello.elf",
-            "target": "extended-remote | /opt/openocd-riscv/bin/openocd -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ./cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./software/c/finka/pico-hello/finka.cfg\"",
+            "target": "extended-remote | /opt/openocd-vexriscv/bin/openocd -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ./cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./software/c/finka/pico-hello/finka.cfg\"",
             //"target": "extended-remote :3333",
             "cwd": "${workspaceRoot}",
-            "gdbpath": "/home/vexriscv/x-tools/riscv32-unknown-elf/bin/riscv32-unknown-elf-gdb",
+            "gdbpath": "/opt/x-tools/riscv32-unknown-elf/bin/riscv32-unknown-elf-gdb",
             "valuesFormatting": "parseText",
             "autorun": [
               "set mem inaccessible-by-default off",
@@ -30,8 +30,11 @@
               "monitor [target current] configure -event gdb-detach {shutdown}",
               //"interrupt",
               "monitor reset halt",
-              "file software/c/finka/pico-hello/build/pico-hello.elf",
               //"file software/c/finka/hello_world/build/hello_world.elf",
+              //"file software/c/finka/pico-hello/build/pico-hello.elf",
+              "file ../wg_lwip/build-riscv/echop",
+              "break mem_malloc",
+              "break mem_free",
               "load"
               //"break main",
               //"continue",
@@ -71,7 +74,7 @@
             //],
             "MIMode": "gdb",
             "miDebuggerPath": "riscv32-unknown-elf-gdb",
-            "miDebuggerServerAddress": "| /opt/openocd-riscv/bin/openocd -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ./cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./software/c/finka/pico-hello/finka.cfg\"",
+            "miDebuggerServerAddress": "| /opt/openocd-vexriscv/bin/openocd -c \"gdb_port pipe; log_output openocd.log\" -c \"set MURAX_CPU0_YAML ./cpu0.yaml\" -f \"interface/jtag_tcp.cfg\" -f \"./software/c/finka/pico-hello/finka.cfg\"",
             //"miDebuggerServerAddress": ":3333",
             "useExtendedRemote": true,
 

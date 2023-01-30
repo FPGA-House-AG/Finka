@@ -3,4 +3,7 @@
     "files.watcherExclude": {
         "**/target": true
     },
+    "files.associations": {
+        "iomanip": "cpp"
+    },
 }

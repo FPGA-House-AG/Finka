@@ -39,3 +39,9 @@ cocotb/Finka/finka
 # Vivado simulator backend
 xsim.dir
 *.wdb
+
+# VSCode xyz-history extension
+.history/
+
+# Node
+node_modules/

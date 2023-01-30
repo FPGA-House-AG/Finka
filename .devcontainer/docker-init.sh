@@ -4,7 +4,7 @@
 #docker container rm -v vscode-docker-vivado
 
 CONTAINER_DISPLAY="0"
-CONTAINER_HOSTNAME="riscv-container"
+CONTAINER_HOSTNAME="vivado-container"
 
 X11TMPDIR=/tmp/vscode-docker-x11-remote
 
