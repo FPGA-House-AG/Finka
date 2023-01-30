@@ -17,7 +17,7 @@ class FinkaWorkspace : public Workspace<VFinka>{
 public:
 	FinkaWorkspace() : Workspace("Finka"){
 		// for synchronous reset, ensure reset de-assert delay is more than clock delay
-		uint64_t baudRate = 115200 * 8;
+		uint64_t baudRate = 115200;
 		uint64_t clockStartDelay = 20000;
 		uint64_t resetDeassertDelay = 2 * clockStartDelay;
 
@@ -25,13 +25,16 @@ public:
 		int axiPeriod = 1.0e12 / 250.0e6;
 		ClockDomain *clk = new ClockDomain(&top->clk, NULL, axiPeriod, clockStartDelay);
 		int packetPeriod = 1.0e12 / 322.0e6;
+#if 0
 		ClockDomain *rx_clk = new ClockDomain(&top->rx_clk, NULL, packetPeriod, clockStartDelay);
 		ClockDomain *tx_clk = new ClockDomain(&top->tx_clk, NULL, packetPeriod, clockStartDelay);
-
+#endif
 		/* time processes; *synchronous* resets, de-asserting with clocks enabled */
 		AsyncReset *rst    = new AsyncReset(&top->rst,    resetDeassertDelay);
+#if 0
 		AsyncReset *tx_rst = new AsyncReset(&top->tx_rst, resetDeassertDelay);
 		AsyncReset *rx_rst = new AsyncReset(&top->rx_rst, resetDeassertDelay);
+#endif
 
 		top->uart_txd = 1;
 
@@ -41,20 +44,24 @@ public:
 
 		/* clock synchronous processes */
 	 	TunTapRx *tunTapRx = new TunTapRx(top->s_axis_rx_tdata, &top->s_axis_rx_tkeep, &top->s_axis_rx_tuser, &top->s_axis_rx_tlast, &top->s_axis_rx_tvalid, &top->s_axis_rx_tready);
-		rx_clk->add(tunTapRx);
+		/*rx_*/clk->add(tunTapRx);
 
 	 	TunTapTx *tunTapTx = new TunTapTx(top->m_axis_tx_tdata, &top->m_axis_tx_tkeep, &top->m_axis_tx_tuser, &top->m_axis_tx_tlast, &top->m_axis_tx_tvalid, &top->m_axis_tx_tready);
-		tx_clk->add(tunTapTx);
+		/*tx_*/clk->add(tunTapTx);
 
 		/* accept incoming AXIS frames from DUT */
 		top->m_axis_tx_tready = 1;
 
 		timeProcesses.push_back(clk);
+#if 0
 		timeProcesses.push_back(rx_clk);
 		timeProcesses.push_back(tx_clk);
+#endif
 		timeProcesses.push_back(rst);
+#if 0
 		timeProcesses.push_back(rx_rst);
 		timeProcesses.push_back(tx_rst);
+#endif
 		timeProcesses.push_back(uartRx);
 		timeProcesses.push_back(uartTx);
 
