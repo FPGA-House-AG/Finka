@@ -1,0 +1,2 @@
+Simulates the Finka.v RTL using Verilator. The RTL is converted
+into a program executable.

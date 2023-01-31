@@ -1,4 +1,4 @@
-val spinalVersion = "1.7.3a"
+val spinalVersion = "dev"
 val spinalDir = "../SpinalHDL.upstream"
 //val spinalVersion = "dev"
 //val spinalDir = "../SpinalHDL.dev"
@@ -42,3 +42,6 @@ lazy val spinalHdlSim = ProjectRef(file(spinalDir), "sim")
 fork := true
 // forward standard input of the sbt process to the forked process
 run / connectInput := true
+
+traceLevel in run := 0
+traceLevel := 0

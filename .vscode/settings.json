@@ -4,6 +4,7 @@
         "**/target": true
     },
     "files.associations": {
-        "iomanip": "cpp"
+        "iomanip": "cpp",
+        "uart.h": "c"
     },
 }

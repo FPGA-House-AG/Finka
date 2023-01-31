@@ -19,11 +19,17 @@
                 "kind": "build",
                 "isDefault": true
             },
+//            "presentation": {
+//                "echo": true,
+//                "reveal": "always",
+//                "focus": false,
+//                "panel": "shared"
+//            },
+
             "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared"
+                "reveal": "silent",
+                //"revealProblems": "onProblem",
+                "close": true
             },
             // Use the standard less compilation problem matcher.
             "problemMatcher": {
@@ -44,7 +50,7 @@
             "type": "shell",
             "command": "make",
             // args passed to command (make), i.e. the Makefile target
-            "args": ["all"],
+            "args": ["clean", "all"],
             // use options.cwd property if the Makefile is not in the project root ${workspaceRoot} dir
             "options": {
                 "cwd": "${workspaceRoot}/software/c/finka/pico-hello",

@@ -18,7 +18,7 @@ static int uart_putc(char c, FILE *file) {
 		uart_putc('\r', file);
 #endif
 	/* Send character */
-  uart_write(UART, c);
+	uart_write(UART, c);
 	/* Return character */
 	return (int) (uint8_t) c;
 }
@@ -76,12 +76,18 @@ void main() {
 	}
 #endif
   // 1 microsecond ticks to timers
-  TIMER_PRESCALER->LIMIT = 250 - 1;
+  TIMER_PRESCALER->LIMIT = (250 * 1000) - 1;
   timer_init(TIMER_A);
-  while (1) { 
+  printf("");
+  uint8_t rxkey[32/*bytes, or 256 bits key*/];
+  for (int i = 0; i < 32; i++) { rxkey[i] = i; }
+  rxkey_write(AXI_RXK, 68/*index*/, rxkey);
+
+  while (0) { 
     printf("Hello world, from pico-hello! %u\n", TIMER_A->VALUE);
     count += 2;
   }
+  while (1);
 }
 
 void _cirqhandler() {

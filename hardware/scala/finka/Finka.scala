@@ -45,6 +45,9 @@ import scala.collection.Seq
 // SpinalCorundum
 import corundum._
 
+// Blackwire
+import blackwire._
+
 case class FinkaConfig(axiFrequency : HertzNumber,
                        onChipRamSize : BigInt,
                        onChipRamHexFile : String,
@@ -233,7 +236,7 @@ class Finka(val config: FinkaConfig) extends Component{
 
     // in rx_clk clock domain, PCIe/plaintext side AXIS Corundum TDATA/TKEEP/TUSER
     //val frametxs = slave Stream new Fragment(CorundumFrame(corundumDataWidth))
-    //val framerxm = master Stream new Fragment(CorundumFrame(corundumDataWidth))
+    val m_axis_rx = master Stream new Fragment(CorundumFrame(corundumDataWidth))
   }
 
   val resetCtrlClockDomain = ClockDomain(
@@ -243,29 +246,14 @@ class Finka(val config: FinkaConfig) extends Component{
   )
 
   val resetCtrl = new ClockingArea(resetCtrlClockDomain) {
-    val systemResetUnbuffered = False
-    //    val coreResetUnbuffered = False
-
-    //Implement a counter to keep the reset axiResetOrder high 64 cycles
-    // Also this counter will automaticly do a reset when the system boot.
-    val systemResetCounter = Reg(UInt(6 bits)) init(0)
-    when(systemResetCounter =/= U(systemResetCounter.range -> true)){
-      systemResetCounter := systemResetCounter + 1
-      systemResetUnbuffered := True
-    }
-    //when(BufferCC(io.asyncReset)){
-    //  systemResetCounter := 0
-    //}
-
-    //Create all reset used later in the design
-    //val systemReset  = RegNext(io.rst) //simPublic()
+    // this reset call also be asserted by the DebugPlugin, if enabled
     val axiReset     = RegNext(io.rst) //.simPublic()
   }
 
   val axiClockDomain = ClockDomain(
     clock = io.clk,
     reset = resetCtrl.axiReset,
-    frequency = FixedFrequency(axiFrequency), //The frequency information is used by the SDRAM controller
+    frequency = FixedFrequency(axiFrequency),
     config = Config.syncConfig
   )
 
@@ -298,8 +286,9 @@ class Finka(val config: FinkaConfig) extends Component{
 
     val corundumAxi4SharedBus = interconnect.copy()
     val prefixAxi4SharedBus = interconnect.copy()
-    val packetTxAxi4SharedBus = interconnect.copy()
-    val packetRxAxi4SharedBus = interconnect.copy()
+    val packetTxAxi4SharedBusWriter = interconnect.copy()
+    val packetRxAxi4SharedBusReader = interconnect.copy()
+    val packetRxAxi4SharedBusRxKey = interconnect.copy()
     val lookupAxi4SharedBus = interconnect.copy()
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
@@ -338,7 +327,7 @@ class Finka(val config: FinkaConfig) extends Component{
         case plugin : DBusSimplePlugin => dBus = plugin.dBus.toAxi4Shared()
         case plugin : DBusCachedPlugin => dBus = plugin.dBus.toAxi4Shared(true/*stageCmd required (?)*/)
         case plugin : CsrPlugin        => {
-          plugin.externalInterrupt := io.coreInterrupt //BufferCC(io.coreInterrupt)
+          plugin.externalInterrupt := io.coreInterrupt
           plugin.timerInterrupt := timerCtrl.io.interrupt
         }
         case plugin : DebugPlugin      => plugin.debugClockDomain{
@@ -354,12 +343,13 @@ class Finka(val config: FinkaConfig) extends Component{
     axiCrossbar.addSlaves(
       ram.io.axi            -> (0x00800000L, onChipRamSize),
       // @NOTE keep finka.h in sync for software
-      corundumAxi4SharedBus -> (0x00C00000L, 4 kB),
-      packetTxAxi4SharedBus -> (0x00C01000L, 4 kB),
-      packetRxAxi4SharedBus -> (0x00C02000L, 4 kB),
-      lookupAxi4SharedBus   -> (0x00C03000L, 4 kB),
-      prefixAxi4SharedBus   -> (0x00C04000L, 4 kB),
-      apbBridge.io.axi      -> (0x00F00000L, 1 MB)
+      corundumAxi4SharedBus           -> (0x00C00000L, 4 kB),
+      packetTxAxi4SharedBusWriter     -> (0x00C01000L, 4 kB),
+      packetRxAxi4SharedBusReader     -> (0x00C02000L, 4 kB),
+      lookupAxi4SharedBus             -> (0x00C03000L, 4 kB),
+      prefixAxi4SharedBus             -> (0x00C04000L, 4 kB),
+      packetRxAxi4SharedBusRxKey      -> (0x00C08000L, 4 kB),
+      apbBridge.io.axi                -> (0x00F00000L, 1 MB)
     )
 
     // sparse AXI4Shared crossbar
@@ -368,8 +358,8 @@ class Finka(val config: FinkaConfig) extends Component{
       // CPU instruction bus (read-only master) can only access RAM slave
       core.iBus         -> List(ram.io.axi),
       // CPU data bus can access all slaves
-      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus, lookupAxi4SharedBus),
-      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBus, packetRxAxi4SharedBus, lookupAxi4SharedBus)
+      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetRxAxi4SharedBusRxKey, lookupAxi4SharedBus),
+      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetRxAxi4SharedBusRxKey, lookupAxi4SharedBus)
     )
 
     /* AXI Peripheral Bus (APB) slave */
@@ -397,7 +387,7 @@ class Finka(val config: FinkaConfig) extends Component{
     })
 
     /* packet TX writer slave */
-    axiCrossbar.addPipelining(packetTxAxi4SharedBus)((crossbar, ctrl) => {
+    axiCrossbar.addPipelining(packetTxAxi4SharedBusWriter)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
@@ -405,7 +395,15 @@ class Finka(val config: FinkaConfig) extends Component{
     })
 
     /* packet RX reader slave */
-    axiCrossbar.addPipelining(packetRxAxi4SharedBus)((crossbar, ctrl) => {
+    axiCrossbar.addPipelining(packetRxAxi4SharedBusReader)((crossbar, ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <<  ctrl.writeRsp
+      crossbar.readRsp               <<  ctrl.readRsp
+    })
+
+    /* packet RX key lookup table */
+    axiCrossbar.addPipelining(packetRxAxi4SharedBusRxKey)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
@@ -506,42 +504,54 @@ class Finka(val config: FinkaConfig) extends Component{
 
   // packet rx area
   val packetRx = new ClockingArea(axiClockDomain) {
-    val packetRxAxi4SharedBus = Axi4Shared(busconfig)
+    val packetRxAxi4SharedBusReader = Axi4Shared(busconfig)
+    val packetRxAxi4SharedBusRxKey = Axi4Shared(busconfig)
 
     // TDATA+TKEEP Ethernet frame from Corundum
     val sink = Stream(Fragment(CorundumFrame(corundumDataWidth)))
+    val source = Stream(Fragment(CorundumFrame(corundumDataWidth)))
 
-    // drop when flow stash cannot accept a full packet (without backpressure)
-    val dropOnFull = CorundumFrameDrop(corundumDataWidth)
-    dropOnFull.io.sink << sink
+//    // drop when flow stash cannot accept a full packet (without backpressure)
+//    val dropOnFull = CorundumFrameDrop(corundumDataWidth)
+//    dropOnFull.io.sink << sink
+//
+//    // ready asserted during packet input, !ready if no room for full packet
+//    val stash = CorundumFrameFlowStash(corundumDataWidth, 32, 24)
+//    stash.io.sink << dropOnFull.io.source
+//    // drop packets when the FlowStash applies backpressure
+//    dropOnFull.io.drop := !stash.io.sink.ready
+//    // convert from AXIS to AXIMM, CPU can read AXIS words
+//    val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
+//    packetReader.io.input << stash.io.source
 
-    // ready asserted during packet input, !ready if no room for full packet
-    val stash = CorundumFrameFlowStash(corundumDataWidth, 32, 24)
-    stash.io.sink << dropOnFull.io.source
-    // drop packets when the FlowStash applies backpressure
-    dropOnFull.io.drop := !stash.io.sink.ready
+    val rx = BlackwireReceive(busconfig)
+    rx.io.sink << sink
+    source << rx.io.source
+    rx.io.ctrl_rxkey << packetRxAxi4SharedBusRxKey.toAxi4()
 
-    // convert from AXIS to AXIMM, CPU can read AXIS words
     val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
-    packetReader.io.input << stash.io.source
+    packetReader.io.input << rx.io.source_handshake
 
     // connect to bus
-    packetReader.io.ctrlbus << packetRxAxi4SharedBus.toAxi4()
+    packetReader.io.ctrlbus << packetRxAxi4SharedBusReader.toAxi4()
   }
   // connect AXIS RX from Corundum to Finka RX path
   io.s_axis_rx >> packetRx.sink
+  io.m_axis_rx << packetRx.source
 
   // packet tx area
   val packetTx = new ClockingArea(axiClockDomain) {
-    val packetTxAxi4SharedBus = Axi4Shared(busconfig)
+    val packetTxAxi4SharedBusWriter = Axi4Shared(busconfig)
     val packetWriter = CorundumFrameWriterAxi4(corundumDataWidth, busconfig)
-    packetWriter.io.ctrlbus << packetTxAxi4SharedBus.toAxi4()
+    packetWriter.io.ctrlbus << packetTxAxi4SharedBusWriter.toAxi4()
   }
   // connect AXIS RX from Finka to Corundum
   io.m_axis_tx << packetTx.packetWriter.io.output
 
-  packetTx.packetTxAxi4SharedBus << axi.packetTxAxi4SharedBus
-  packetRx.packetRxAxi4SharedBus << axi.packetRxAxi4SharedBus
+  // connect AXI4
+  packetTx.packetTxAxi4SharedBusWriter << axi.packetTxAxi4SharedBusWriter
+  packetRx.packetRxAxi4SharedBusReader << axi.packetRxAxi4SharedBusReader
+  packetRx.packetRxAxi4SharedBusRxKey << axi.packetRxAxi4SharedBusRxKey
   prefix.prefixAxi4Bus << axi.prefixAxi4SharedBus.toAxi4()
 
   io.gpioA              <> axi.gpioACtrl.io.gpio
@@ -611,9 +621,10 @@ object FinkaWithMemoryInit{
   def main(args: Array[String]) {
     val config = Config.spinal
     val verilog = config.generateVerilog({
-      val socConfig = FinkaConfig.default
-      //.copy(onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex")
-      .copy(onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex")
+      val socConfig = FinkaConfig.default.copy(
+        //onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
+        onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
+      )
       val toplevel = new Finka(socConfig)
       // return this
       toplevel
@@ -650,7 +661,7 @@ object FinkaSim {
   def main(args: Array[String]): Unit = {
     val simSlowDown = false
     val socConfig = FinkaConfig.default.copy(
-      corundumDataWidth = 128,
+      corundumDataWidth = 512,
       //onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
       onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
       //onChipRamHexFile = "../wg_lwip/build-riscv/echop.hex"
@@ -666,7 +677,7 @@ object FinkaSim {
     // LD_LIBRARY_PATH=/opt/Xilinx//Vivado/2021.2/lib/lnx64.o stdbuf -oL -eL sbt "runMain finka.FinkaSim"
 
     // !! set to true to generate a wavefrom dump for GTKWave -f 
-    val waveform = false
+    val waveform = true
     if (waveform) simConfig.withFstWave//.withWaveDepth(10) // does not work with Verilator, use SimTimeout()
 
     simConfig.compile{
@@ -675,6 +686,10 @@ object FinkaSim {
       // expose internal signals
       //dut.resetCtrl.systemReset.simPublic()
       dut.resetCtrl.axiReset.simPublic()
+      dut.packetRx.packetReader.io.ctrlbus.r.valid.simPublic()
+      // to wait on writes/reads to/from rxkey
+      dut.packetRx.rx.io.ctrl_rxkey.w.valid.simPublic()
+      dut.packetRx.rx.io.ctrl_rxkey.r.valid.simPublic()
 
       /* return dut */
       dut
@@ -713,9 +728,13 @@ object FinkaSim {
         baudPeriod = uartBaudPeriod
       )
 
+      // de-assert interrupt input to CPU
       dut.io.coreInterrupt #= false
 
+      // transmit path (downstream) to Ethernet port does not accept data yet
       dut.io.m_axis_tx.ready #= false
+
+      // receive path (upstream) from Ethernet port does not have valid data yet
       dut.io.s_axis_rx.valid #= false
       dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
 
@@ -751,7 +770,7 @@ if (false) {
       dut.io.s_axis_rx.valid #= false
 }
 
-dut.io.m_axis_tx.ready #= true
+      //dut.io.m_axis_tx.ready #= true
 
       //val monitorResetsThread = fork {
       //  if (dut.resetCtrl.axiReset.toBoolean == true) {
@@ -765,7 +784,7 @@ dut.io.m_axis_tx.ready #= true
 
         //ffffffffffffaabbcc11111108060001080006040001aabbcc111111c0a8ff01000000000000c0a8ff02
 
-        val payload_wg4 =
+        val payload =
         // <-------- Ethernet header --------------> <-IPv4 header IHL=5 protocol=0x11->                         <--5555,5555,len0x172-> <----Wireguard Type 4 ------------------------> < L a  d  i  e  s
           "01 02 03 04 05 06 01 02 03 04 05 06 08 00 45 11 22 33 44 55 66 77 88 11 00 00 00 00 00 00 00 00 00 00 15 b3 15 b3 01 72 00 00 04 00 00 00 11 22 33 44 c1 c2 c3 c4 c5 c6 c7 c8 4c 61 64 69 65 73 " +
         //  a  n  d     G  e  n  t  l  e  m  e  n     o  f     t  h  e     c  l  a  s  s     o  f     '  9  9  :     I  f     I     c  o  u  l  d     o  f  f  e  r     y  o  u     o  n  l  y     o  n
@@ -773,7 +792,7 @@ dut.io.m_axis_tx.ready #= true
         //  e     t  i  p     f  o  r     t  h  e     f  u  t  u  r  e  ,     s  u  n  s  c  r  e  e  n     w  o  u  l  d     b  e     i  t  . <---------- Poly 1305 Tag (16 bytes) --------->
           "65 20 74 69 70 20 66 6f 72 20 74 68 65 20 66 75 74 75 72 65 2c 20 73 75 6e 73 63 72 65 65 6e 20 77 6f 75 6c 64 20 62 65 20 69 74 2e 13 05 13 05 13 05 13 05 13 05 13 05 13 05 13 05 00 00 00 00 "
 
-        val payload = "ffffffffffffaabbcc11111108060001080006040001aabbcc111111c0a8ff01000000000000c0a8ff02"
+        //val payload = "ffffffffffffaabbcc11111108060001080006040001aabbcc111111c0a8ff01000000000000c0a8ff02"
 
         /* create a List of Arrays */
         val hexstring = payload.filterNot(_.isWhitespace)
@@ -788,7 +807,7 @@ dut.io.m_axis_tx.ready #= true
           }
         }
         val plaintext = strs.toList
-        printf("packet_length = %d, number of words = %d", packet_length, plaintext.size)
+        printf("packet_length = %d, number of words = %d\n", packet_length, plaintext.size)
 
         // 64 - 6 = 58 bytes for all headers
         // 3 * 64 bytes - 4 = 188 bytes for full Ethernet packet (as above)
@@ -806,9 +825,18 @@ dut.io.m_axis_tx.ready #= true
         var tkeep0 = BigInt(0)
         var pause = false
 
-        dut.axiClockDomain.waitSamplingWhere(dut.io.m_axis_tx.ready.toBoolean & dut.io.m_axis_tx.valid.toBoolean)
-        printf("Saw packet from DUT\n");
-
+        // wait for rxkeys to have been written first
+        dut.axiClockDomain.waitSamplingWhere(dut.packetRx.rx.io.ctrl_rxkey.w.valid.toBoolean)
+        printf("RX Keys have been written.\n")
+        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        printf("RX Keys have been read.\n")
         var sent = 0
         while (sent < 1) {
           //var packet_length = 3 * 64 - 4 // = 188 bytes
@@ -856,6 +884,12 @@ dut.io.m_axis_tx.ready #= true
           sent += 1
         }
       } //fork
+
+      // packet receiver
+      val receiveThread = fork {
+        dut.axiClockDomain.waitSamplingWhere(dut.io.m_axis_tx.ready.toBoolean & dut.io.m_axis_tx.valid.toBoolean)
+        printf("Saw packet from DUT\n");
+      }
 
         //if (dut.packet.packetWriter.bridge.commit2.toBoolean) {
         //  println("COMMIT2PACKET")
