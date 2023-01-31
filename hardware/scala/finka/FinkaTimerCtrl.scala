@@ -18,7 +18,7 @@ object FinkaTimerCtrl{
   )
 }
 
-case class FinkaTimerCtrlExternal() extends Bundle{
+case class FinkaTimerCtrlExternal() extends Bundle {
   val clear = Bool()
   val tick = Bool()
 }
