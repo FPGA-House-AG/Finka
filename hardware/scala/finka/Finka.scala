@@ -677,10 +677,18 @@ object FinkaSim {
     // LD_LIBRARY_PATH=/opt/Xilinx//Vivado/2021.2/lib/lnx64.o stdbuf -oL -eL sbt "runMain finka.FinkaSim"
 
     // !! set to true to generate a wavefrom dump for GTKWave -f 
-    val waveform = true
+    val waveform = false
     if (waveform) simConfig.withFstWave//.withWaveDepth(10) // does not work with Verilator, use SimTimeout()
 
     simConfig.compile{
+
+      val socConfig = FinkaConfig.default.copy(
+        corundumDataWidth = 512,
+        //onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
+        onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
+        //onChipRamHexFile = "../wg_lwip/build-riscv/echop.hex"
+      )
+
       val dut = new Finka(socConfig)
 
       // expose internal signals
