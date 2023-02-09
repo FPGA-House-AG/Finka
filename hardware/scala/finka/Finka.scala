@@ -88,6 +88,7 @@ object FinkaConfig{
         //            catchAccessFault = true
         //          ),
         new IBusCachedPlugin(
+          // processor first instruction fetch address after reset
           resetVector = 0x00800000L,
           prediction = STATIC,
           config = InstructionCacheConfig(
@@ -130,7 +131,7 @@ object FinkaConfig{
           //            )
         ),
         new StaticMemoryTranslatorPlugin(
-          // 0x00C00000-0x00FFFFFF is uncached
+          // 0x00C00000-0x00FFFFFF is uncached, system peripheral registers
           ioRange      = _(23 downto 22) === 0x3
         ),
         new DecoderSimplePlugin(
@@ -171,6 +172,7 @@ object FinkaConfig{
             misaExtensionsInit = 66,
             misaAccess     = CsrAccess.NONE,
             mtvecAccess    = CsrAccess.NONE,
+            // trap and interrupt vector
             mtvecInit      = 0x00800020l,
             mepcAccess     = CsrAccess.READ_WRITE,
             mscratchGen    = false,
@@ -264,6 +266,9 @@ class Finka(val config: FinkaConfig) extends Component{
     frequency = FixedFrequency(axiFrequency)
   )
 
+  // AXI4MM but most signals disabled: useId = false, useRegion = false, 
+  // useBurst = false, useLock = false, useCache = false, useSize = false, useQos = false,
+  // useLen = false, useLast = false, useResp = false, useProt = true, useStrb = false))
   val busconfig = Axi4Config(32, 32, 2, useLock = false, useQos = false, useRegion = false)
   // interconnect is an AXI4 Shared AW/AR bus (SpinalHDL specific)
   val interconnect = Axi4Shared(busconfig)
@@ -293,10 +298,6 @@ class Finka(val config: FinkaConfig) extends Component{
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
     val pcieAxi4SharedBus = pcieAxi4Bus.toShared()
-
-    //, useId = false, useRegion = false, 
-    // useBurst = false, useLock = false, useCache = false, useSize = false, useQos = false,
-    // useLen = false, useLast = false, useResp = false, useProt = true, useStrb = false))
 
     val apbBridge = Axi4SharedToApb3Bridge(
       addressWidth = 20,
