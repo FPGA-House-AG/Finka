@@ -1,15 +1,21 @@
-// Based on Briey, but with VGA and SDRAM controller removed
+// Finka is the SoC for Blackwire
+// It handles all incoming packets from Ethernet, except Wireguard Type 4.
+// Finka handles Wireguard Type 1, 2 and 3 messages for handshaking.
+// (The remaining Type 4 is handled in logic in the RX and TX RTL paths.)
+//
+// Finka is based on Briey, but with VGA and SDRAM controller removed
 
-// Goal 1 is to expose a full (non-shared) AXI4 master on the top-level.
-// see "extAxi4SharedBus" for the bus between crossbar and this master
-// see "extAxi4Master" for the master interface for toplevel I/O
-// This works, tested in hardware.
-
-// Goal 2 is to expose a full (non-shared) AXI4 slave on the top-level.
-// see "pcieAxi4SharedBus" for the bus between crossbar and this slave
-// pcieAxi4SharedBus is bridged from pcieAxi4Bus
-// see "pcieAxi4Slave" for the slave interface for toplevel I/O
-// This compiles.
+// Finka is based around a VexRiscv RV32IM CPU, which connects to a AXI4
+// crossbar.
+// Masters connected to this crossbar are the CPU instruction and data
+// bus and a master coming from a PCIe BAR (MMIO).
+// Slaves on the crossbar are:
+//  - APH with timer, UART and GPIO peripherals.
+//  - AXI4 bus going into Corundum app section.
+//  - RX key lookup table (LUT), to update symmetric keys.
+//  - TX key lookup table (LUT), to update symmetric keys (@TODO).
+//  - RX packet reader, to read non-Type 4 messages.
+//  - TX packet writer, to write Ethernet packets.
 
 package finka
 
