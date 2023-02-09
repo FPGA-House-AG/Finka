@@ -355,7 +355,11 @@ class Finka(val config: FinkaConfig) extends Component{
       packetRxAxi4SharedBusReader     -> (0x00C02000L, 4 kB),
       lookupAxi4SharedBus             -> (0x00C03000L, 4 kB),
       prefixAxi4SharedBus             -> (0x00C04000L, 4 kB),
-      packetRxAxi4SharedBusRxKey      -> (0x00C08000L, 4 kB),
+      // 1024 keys for 4 (curr, next, prev, unused) sessions/per * 256 peers
+      // each key is 32 bytes (256 bits)
+      // 32 kiB or 0x8000 bytes
+      packetRxAxi4SharedBusRxKey      -> (0x00C08000L, 32 kB),
+      //packetTxAxi4SharedBusRxKey      -> (0x00C10000L, 32 kB),
       apbBridge.io.axi                -> (0x00F00000L, 1 MB)
     )
 
