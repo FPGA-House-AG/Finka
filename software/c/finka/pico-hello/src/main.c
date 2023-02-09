@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "finka.h"
+#include "rxkey.h"
 
 Uart_Config uart_cfg = {
   .dataLength = 8,
@@ -79,6 +80,7 @@ void main() {
   TIMER_PRESCALER->LIMIT = (250 * 1000) - 1;
   timer_init(TIMER_A);
   printf("");
+
   uint8_t rxkey[32/*bytes, or 256 bits key*/];
   for (int i = 0; i < 32; i++) { rxkey[i] = i; }
   rxkey_write(AXI_RXK, 68/*index*/, rxkey);

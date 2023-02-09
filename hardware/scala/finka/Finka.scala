@@ -518,29 +518,35 @@ class Finka(val config: FinkaConfig) extends Component{
     val sink = Stream(Fragment(CorundumFrame(corundumDataWidth)))
     val source = Stream(Fragment(CorundumFrame(corundumDataWidth)))
 
-//    // drop when flow stash cannot accept a full packet (without backpressure)
-//    val dropOnFull = CorundumFrameDrop(corundumDataWidth)
-//    dropOnFull.io.sink << sink
+//    // RISC-V should receive Wireguard Type 4 data messages
+//    (type4_to_riscv) generate new Area {
+//      // drop when flow stash cannot accept a full packet (without backpressure)
+//      val dropOnFull = CorundumFrameDrop(corundumDataWidth)
+//      dropOnFull.io.sink << sink
+//  
+//      // ready asserted during packet input, !ready if no room for full packet
+//      val stash = CorundumFrameFlowStash(corundumDataWidth, 32, 24)
+//      stash.io.sink << dropOnFull.io.source
+//      // drop packets when the FlowStash applies backpressure
+//      dropOnFull.io.drop := !stash.io.sink.ready
+//      // convert from AXIS to AXIMM, CPU can read AXIS words
+//      val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
+//      packetReader.io.input << stash.io.source
+//    }
+//    // RISC-V should NOT receive Wireguard Type 4 data messages
+//    (!type4_to_riscv) generate new Area {
 //
-//    // ready asserted during packet input, !ready if no room for full packet
-//    val stash = CorundumFrameFlowStash(corundumDataWidth, 32, 24)
-//    stash.io.sink << dropOnFull.io.source
-//    // drop packets when the FlowStash applies backpressure
-//    dropOnFull.io.drop := !stash.io.sink.ready
-//    // convert from AXIS to AXIMM, CPU can read AXIS words
-//    val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
-//    packetReader.io.input << stash.io.source
+      val rx = BlackwireReceive(busconfig, include_chacha = true)
+      rx.io.sink << sink
+      source << rx.io.source
+      rx.io.ctrl_rxkey << packetRxAxi4SharedBusRxKey.toAxi4()
 
-    val rx = BlackwireReceive(busconfig)
-    rx.io.sink << sink
-    source << rx.io.source
-    rx.io.ctrl_rxkey << packetRxAxi4SharedBusRxKey.toAxi4()
+      val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
+      packetReader.io.input << rx.io.source_handshake
 
-    val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
-    packetReader.io.input << rx.io.source_handshake
-
-    // connect to bus
-    packetReader.io.ctrlbus << packetRxAxi4SharedBusReader.toAxi4()
+      // connect to bus
+      packetReader.io.ctrlbus << packetRxAxi4SharedBusReader.toAxi4()
+//    }
   }
   // connect AXIS RX from Corundum to Finka RX path
   io.s_axis_rx >> packetRx.sink
@@ -667,19 +673,13 @@ object FinkaSim {
 
   def main(args: Array[String]): Unit = {
     val simSlowDown = false
-    val socConfig = FinkaConfig.default.copy(
-      corundumDataWidth = 512,
-      //onChipRamHexFile = "software/c/finka/hello_world/build/hello_world.hex"
-      onChipRamHexFile = "software/c/finka/pico-hello/build/pico-hello.hex"
-      //onChipRamHexFile = "../wg_lwip/build-riscv/echop.hex"
-    )
 
     val simConfig = SimConfig
     // synchronous resets, see Config.scala
     .withConfig(Config.spinal)
     .allOptimisation
     //.withGhdl.addRunFlag("--unbuffered").addRunFlag("--ieee-asserts=disable").addRunFlag("--assert-level=none").addRunFlag("--backtrace-severity=warning")
-    .withVerilator.addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
+    //.withVerilator.addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
     //.withXSim.withXilinxDevice("xcvu35p-fsvh2104-2-e")
     // LD_LIBRARY_PATH=/opt/Xilinx//Vivado/2021.2/lib/lnx64.o stdbuf -oL -eL sbt "runMain finka.FinkaSim"
 
@@ -718,7 +718,15 @@ object FinkaSim {
       val uartBaudRate =     115200
       val uartBaudPeriod =  (1e12 / uartBaudRate).toLong
 
+      // de-assert interrupt input to CPU
+      dut.io.coreInterrupt #= false
+
+      // transmit path (downstream) to Ethernet port does not accept data yet
+      dut.io.m_axis_tx.ready #= false
+
+      // receive path (upstream) from Ethernet port does not have valid data yet
       dut.io.s_axis_rx.valid #= false
+      dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
 
       dut.io.timerExternal.clear #= true
       dut.io.timerExternal.tick #= true
@@ -743,47 +751,40 @@ object FinkaSim {
         baudPeriod = uartBaudPeriod
       )
 
-      // de-assert interrupt input to CPU
-      dut.io.coreInterrupt #= false
-
-      // transmit path (downstream) to Ethernet port does not accept data yet
-      dut.io.m_axis_tx.ready #= false
-
-      // receive path (upstream) from Ethernet port does not have valid data yet
-      dut.io.s_axis_rx.valid #= false
-      dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
-
       var commits_seen = 0
       // run 0.1 second after done
       var cycles_post = 100000
 
       axiClockDomain.waitRisingEdge(40)
 
-if (false) {
-      // push one word in stream
-      dut.io.s_axis_rx.payload.tdata.assignBigInt(0x0011223344556677L)
-      dut.io.s_axis_rx.payload.tkeep.assignBigInt(0x00FF)
-      dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
-      dut.io.s_axis_rx.payload.last #= false
-      dut.io.s_axis_rx.valid #= true
-      dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
-      dut.io.s_axis_rx.payload.last #= false
-      dut.io.s_axis_rx.valid #= true
-      dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
-      dut.io.s_axis_rx.payload.last #= true
-      dut.io.s_axis_rx.valid #= true
-      dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
-      dut.io.s_axis_rx.valid #= false
+      dut.io.timerExternal.clear #= false
 
-      // push one word in stream
-      dut.io.s_axis_rx.payload.tdata.assignBigInt(0x0011223344556677L)
-      dut.io.s_axis_rx.payload.tkeep.assignBigInt(0x00FF)
-      dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
-      dut.io.s_axis_rx.payload.last #= true
-      dut.io.s_axis_rx.valid #= true
-      dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
-      dut.io.s_axis_rx.valid #= false
-}
+
+      if (false) {
+        // push one word in stream
+        dut.io.s_axis_rx.payload.tdata.assignBigInt(0x0011223344556677L)
+        dut.io.s_axis_rx.payload.tkeep.assignBigInt(0x00FF)
+        dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
+        dut.io.s_axis_rx.payload.last #= false
+        dut.io.s_axis_rx.valid #= true
+        dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+        dut.io.s_axis_rx.payload.last #= false
+        dut.io.s_axis_rx.valid #= true
+        dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+        dut.io.s_axis_rx.payload.last #= true
+        dut.io.s_axis_rx.valid #= true
+        dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+        dut.io.s_axis_rx.valid #= false
+
+        // push one word in stream
+        dut.io.s_axis_rx.payload.tdata.assignBigInt(0x0011223344556677L)
+        dut.io.s_axis_rx.payload.tkeep.assignBigInt(0x00FF)
+        dut.io.s_axis_rx.payload.tuser.assignBigInt(0)
+        dut.io.s_axis_rx.payload.last #= true
+        dut.io.s_axis_rx.valid #= true
+        dut.axiClockDomain.waitSamplingWhere(dut.io.s_axis_rx.ready.toBoolean)
+        dut.io.s_axis_rx.valid #= false
+      }
 
       //dut.io.m_axis_tx.ready #= true
 
@@ -797,22 +798,18 @@ if (false) {
       // packet generator
       val sendThread = fork {
 
-        //ffffffffffffaabbcc11111108060001080006040001aabbcc111111c0a8ff01000000000000c0a8ff02
-
         val payload =
-        // <-------- Ethernet header --------------> <-IPv4 header IHL=5 protocol=0x11->                         <--5555,5555,len0x172-> <----Wireguard Type 4 ------------------------> < L a  d  i  e  s
-          "01 02 03 04 05 06 01 02 03 04 05 06 08 00 45 11 22 33 44 55 66 77 88 11 00 00 00 00 00 00 00 00 00 00 15 b3 15 b3 01 72 00 00 04 00 00 00 11 22 33 44 c1 c2 c3 c4 c5 c6 c7 c8 4c 61 64 69 65 73 " +
-        //  a  n  d     G  e  n  t  l  e  m  e  n     o  f     t  h  e     c  l  a  s  s     o  f     '  9  9  :     I  f     I     c  o  u  l  d     o  f  f  e  r     y  o  u     o  n  l  y     o  n
-          "20 61 6e 64 20 47 65 6e 74 6c 65 6d 65 6e 20 6f 66 20 74 68 65 20 63 6c 61 73 73 20 6f 66 20 27 39 39 3a 20 49 66 20 49 20 63 6f 75 6c 64 20 6f 66 66 65 72 20 79 6f 75 20 6f 6e 6c 79 20 6f 6e " +
-        //  e     t  i  p     f  o  r     t  h  e     f  u  t  u  r  e  ,     s  u  n  s  c  r  e  e  n     w  o  u  l  d     b  e     i  t  . <---------- Poly 1305 Tag (16 bytes) --------->
-          "65 20 74 69 70 20 66 6f 72 20 74 68 65 20 66 75 74 75 72 65 2c 20 73 75 6e 73 63 72 65 65 6e 20 77 6f 75 6c 64 20 62 65 20 69 74 2e 13 05 13 05 13 05 13 05 13 05 13 05 13 05 13 05 00 00 00 00 "
-
-        //val payload = "ffffffffffffaabbcc11111108060001080006040001aabbcc111111c0a8ff01000000000000c0a8ff02"
+        // <-------- Ethernet header --------------> <-IPv4 header IHL=5 protocol=0x11->                         <--5555,5555,len0x172-> <----Wireguard Type 4 ------------------------> < encrypted payload
+          "01 02 03 04 05 06 01 02 03 04 05 06 08 00 45 11 22 33 44 55 66 77 88 11 00 00 00 00 00 00 00 00 00 00 15 b3 15 b3 01 72 00 00 04 00 00 00 00 00 00 01 40 41 42 43 44 45 46 47 a4 79 cb 54 62 89 " +
+          "46 d6 f4 04 2a 8e 38 4e f4 bd 2f bc 73 30 b8 be 55 eb 2d 8d c1 8a aa 51 d6 6a 8e c1 f8 d3 61 9a 25 8d b0 ac 56 95 60 15 b7 b4 93 7e 9b 8e 6a a9 57 b3 dc 02 14 d8 03 d7 76 60 aa bc 91 30 92 97 " +
+          "1d a8 f2 07 17 1c e7 84 36 08 16 2e 2e 75 9d 8e fc 25 d8 d0 93 69 90 af 63 c8 20 ba 87 e8 a9 55 b5 c8 27 4e f7 d1 0f 6f af d0 46 47 1b 14 57 76 ac a2 f7 cf 6a 61 d2 16 64 25 2f b1 f5 ba d2 ee " +
+          "98 e9 64 8b b1 7f 43 2d cc e4 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
 
         /* create a List of Arrays */
         val hexstring = payload.filterNot(_.isWhitespace)
-        val packet_length = hexstring.size / 2/*nibbles per byte*/;
+        val packet_length = hexstring.size / 2/*nibbles per byte*/ - 4;
         val words = hexstring.grouped(2/*nibbles per byte*/).grouped(dut.config.corundumDataWidth/8)
+        // create a list of BigInts, for each word
         var strs  = new ListBuffer[BigInt]()
         words.zipWithIndex.foreach {
           case (word, count) => {
@@ -841,17 +838,18 @@ if (false) {
         var pause = false
 
         // wait for rxkeys to have been written first
-        dut.axiClockDomain.waitSamplingWhere(dut.packetRx.rx.io.ctrl_rxkey.w.valid.toBoolean)
-        printf("RX Keys have been written.\n")
-        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
-        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
-        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
-        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
-        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
-        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
-        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
-        dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
-        printf("RX Keys have been read.\n")
+        //dut.axiClockDomain.waitSamplingWhere(dut.packetRx.rx.io.ctrl_rxkey.w.valid.toBoolean)
+        //printf("RX Keys have been written.\n")
+        //dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        //dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        //dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        //dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        //dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        //dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        //dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        //dut.axiClockDomain.waitRisingEdgeWhere(dut.packetRx.rx.io.ctrl_rxkey.r.valid.toBoolean)
+        //printf("RX Keys have been read.\n")
+
         var sent = 0
         while (sent < 1) {
           //var packet_length = 3 * 64 - 4 // = 188 bytes

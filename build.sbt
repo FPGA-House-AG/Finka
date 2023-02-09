@@ -1,5 +1,5 @@
 val spinalVersion = "dev"
-val spinalDir = "../SpinalHDL.upstream"
+val spinalDir = "../SpinalHDL.dev" // 4ec5b9db71767e1776091afca6c401903a4ad747
 //val spinalVersion = "dev"
 //val spinalDir = "../SpinalHDL.dev"
 
@@ -31,10 +31,11 @@ lazy val finka = (project in file("."))
   .dependsOn(spinalCorundum)
   .dependsOn(spinalHdlIdslPlugin, spinalHdlSim, spinalHdlCore, spinalHdlLib)
 
-lazy val vexRiscv = RootProject(file("../VexRiscv.pinned")) // 87c8822f55c0674d24a55b2d83255b60f8a6146e
-lazy val spinalCorundum = RootProject(file("../SpinalCorundum")) // 29e0ab65c5a077b1a4c1ee47f40c31b526537eda
+lazy val vexRiscv = RootProject(file("../VexRiscv.pinned")) // 2bc6e70f03edcacd875a4ec93714dc023ae136d3
+lazy val spinalCorundum = RootProject(file("../SpinalCorundum")) // e033b3d56f620577ac5376d00d68232970389b3d
 
-lazy val spinalHdlCore = ProjectRef(file(spinalDir), "core") // 88579afcef46effb1597177e6f7dd5ca860b0aef
+// git clone --branch dev git@github.com:likewise/SpinalHDL.git && cd SpinalHDL && git checkout 419c87b0285c77c823973badc5451db0ef0791b6
+lazy val spinalHdlCore = ProjectRef(file(spinalDir), "core") 
 lazy val spinalHdlLib = ProjectRef(file(spinalDir), "lib")
 lazy val spinalHdlIdslPlugin = ProjectRef(file(spinalDir), "idslplugin")
 lazy val spinalHdlSim = ProjectRef(file(spinalDir), "sim")

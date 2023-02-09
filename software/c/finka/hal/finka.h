@@ -6,7 +6,6 @@
 #include "interrupt.h"
 #include "gpio.h"
 #include "uart.h"
-#include "rxkey.h"
 
 // APH
 #define GPIO_A    ((Gpio_Reg*)(0x00F00000))
