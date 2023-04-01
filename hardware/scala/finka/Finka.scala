@@ -13,7 +13,7 @@
 //  - APH with timer, UART and GPIO peripherals.
 //  - AXI4 bus going into Corundum app section.
 //  - RX key lookup table (LUT), to update symmetric keys.
-//  - TX key lookup table (LUT), to update symmetric keys (@TODO).
+//  - TX key lookup table (LUT), to update symmetric keys.
 //  - RX packet reader, to read non-Type 4 messages.
 //  - TX packet writer, to write Ethernet packets.
 
@@ -222,7 +222,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val timerExternal = in(FinkaTimerCtrlExternal())
     val coreInterrupt = in Bool()
 
-    /* register interface to IP address lookup update interface */
+    /* register interface to IP address lookup prefix update interface */
     val update0 = out UInt(32 bits)
     val update1 = out UInt(32 bits)
     val update2 = out UInt(32 bits)
@@ -238,14 +238,28 @@ class Finka(val config: FinkaConfig) extends Component{
     // AXI4 slave from (external) PCIe bridge
     val pcieAxi4Slave = slave(Axi4(pcieAxi4Config))
     
-    // in rx_clk clock domain, Ethernet/encrypted side, AXIS Corundum TDATA/TKEEP/TUSER
-    val m_axis_tx = master Stream new Fragment(CorundumFrame(corundumDataWidth))
+    // AXIS Corundum TDATA/TKEEP/TUSER interfaces
+
+    // encrypted to Ethernet CMAC
+    val m_axis_tx = master Stream new Fragment(CorundumFrame(corundumDataWidth, 17))
+    // encrypted from Ethernet CMAC
     val s_axis_rx = slave Stream new Fragment(CorundumFrame(corundumDataWidth))
 
-    // in rx_clk clock domain, PCIe/plaintext side AXIS Corundum TDATA/TKEEP/TUSER
-    //val frametxs = slave Stream new Fragment(CorundumFrame(corundumDataWidth))
+    // plaintext from PCIe
+    val s_axis_tx  = slave Stream new Fragment(CorundumFrame(corundumDataWidth, 17))
+    // plaintext to PCIe
     val m_axis_rx = master Stream new Fragment(CorundumFrame(corundumDataWidth))
+
+    // completions to PCIe
+    val m_axis_tx_cpl = master(Stream(Bits(16 bits)))
+    // completions from CMAC
+    val s_axis_tx_cpl = slave(Stream(Bits(16 bits)))
   }
+  io.m_axis_tx.addAttribute("mark_debug")
+  io.s_axis_tx.addAttribute("mark_debug")
+
+  io.m_axis_tx_cpl.addAttribute("mark_debug")
+  io.s_axis_tx_cpl.addAttribute("mark_debug")
 
   val resetCtrlClockDomain = ClockDomain(
     clock = io.clk,
@@ -295,12 +309,16 @@ class Finka(val config: FinkaConfig) extends Component{
       println("[WARNING] Axi4SharedOnChipRam is NOT initialized.")
     }
 
+    // crossbar to slaves
     val corundumAxi4SharedBus = interconnect.copy()
     val prefixAxi4SharedBus = interconnect.copy()
     val packetTxAxi4SharedBusWriter = interconnect.copy()
     val packetRxAxi4SharedBusReader = interconnect.copy()
     val packetRxAxi4SharedBusRxKey = interconnect.copy()
-    val lookupAxi4SharedBus = interconnect.copy()
+    val packetTxAxi4SharedBusTxKey = interconnect.copy()
+    val packetTxAxi4SharedBusP2S = interconnect.copy()
+    val packetTxAxi4SharedBusP2EP = interconnect.copy()
+    val packetTxAxi4SharedBusL2R = interconnect.copy()
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
     val pcieAxi4SharedBus = pcieAxi4Bus.toShared()
@@ -348,18 +366,20 @@ class Finka(val config: FinkaConfig) extends Component{
     val axiCrossbar = Axi4CrossbarFactory()
 
     axiCrossbar.addSlaves(
-      ram.io.axi            -> (0x00800000L, onChipRamSize),
+      ram.io.axi                      -> (0x00800000L, onChipRamSize),
       // @NOTE keep finka.h in sync for software
       corundumAxi4SharedBus           -> (0x00C00000L, 4 kB),
       packetTxAxi4SharedBusWriter     -> (0x00C01000L, 4 kB),
       packetRxAxi4SharedBusReader     -> (0x00C02000L, 4 kB),
-      lookupAxi4SharedBus             -> (0x00C03000L, 4 kB),
       prefixAxi4SharedBus             -> (0x00C04000L, 4 kB),
       // 1024 keys for 4 (curr, next, prev, unused) sessions/per * 256 peers
       // each key is 32 bytes (256 bits)
       // 32 kiB or 0x8000 bytes
       packetRxAxi4SharedBusRxKey      -> (0x00C08000L, 32 kB),
-      //packetTxAxi4SharedBusRxKey      -> (0x00C10000L, 32 kB),
+      packetTxAxi4SharedBusTxKey      -> (0x00C10000L, 32 kB),
+      packetTxAxi4SharedBusP2S        -> (0x00C18000L, 32 kB),
+      packetTxAxi4SharedBusP2EP       -> (0x00C20000L, 32 kB),
+      packetTxAxi4SharedBusL2R        -> (0x00C28000L, 32 kB),
       apbBridge.io.axi                -> (0x00F00000L, 1 MB)
     )
 
@@ -369,72 +389,97 @@ class Finka(val config: FinkaConfig) extends Component{
       // CPU instruction bus (read-only master) can only access RAM slave
       core.iBus         -> List(ram.io.axi),
       // CPU data bus can access all slaves
-      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetRxAxi4SharedBusRxKey, lookupAxi4SharedBus),
-      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetRxAxi4SharedBusRxKey, lookupAxi4SharedBus)
+      //@build should check for double entries
+      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R),
+      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R)
     )
 
     /* AXI Peripheral Bus (APB) slave */
     axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar, bridge) => {
       crossbar.sharedCmd.halfPipe() >> bridge.sharedCmd
-      crossbar.writeData.halfPipe() >> bridge.writeData
-      crossbar.writeRsp             << bridge.writeRsp
-      crossbar.readRsp              << bridge.readRsp
+      crossbar.writeData            >/-> bridge.writeData
+      crossbar.writeRsp             <-/< bridge.writeRsp
+      crossbar.readRsp              <-/< bridge.readRsp
     })
 
     /* corundum slave */
     axiCrossbar.addPipelining(corundumAxi4SharedBus)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <<  ctrl.writeRsp
-      crossbar.readRsp               <<  ctrl.readRsp
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
     })
 
     /* prefix update slave */
     axiCrossbar.addPipelining(prefixAxi4SharedBus)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <<  ctrl.writeRsp
-      crossbar.readRsp               <<  ctrl.readRsp
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
     })
 
     /* packet TX writer slave */
     axiCrossbar.addPipelining(packetTxAxi4SharedBusWriter)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <<  ctrl.writeRsp
-      crossbar.readRsp               <<  ctrl.readRsp
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
     })
 
     /* packet RX reader slave */
     axiCrossbar.addPipelining(packetRxAxi4SharedBusReader)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <<  ctrl.writeRsp
-      crossbar.readRsp               <<  ctrl.readRsp
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
     })
 
     /* packet RX key lookup table */
     axiCrossbar.addPipelining(packetRxAxi4SharedBusRxKey)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <<  ctrl.writeRsp
-      crossbar.readRsp               <<  ctrl.readRsp
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
     })
 
-    /* lookup table slave */
-    axiCrossbar.addPipelining(lookupAxi4SharedBus)((crossbar, ctrl) => {
+    /* packet TX key lookup table */
+    axiCrossbar.addPipelining(packetTxAxi4SharedBusTxKey)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <<  ctrl.writeRsp
-      crossbar.readRsp               <<  ctrl.readRsp
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
+    })
+
+    /* packet Peer to Session (P2S) lookup table */
+    axiCrossbar.addPipelining(packetTxAxi4SharedBusP2S)((crossbar, ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
+    })
+
+    /* packet Peer to Endpoint (P2EP) lookup table */
+    axiCrossbar.addPipelining(packetTxAxi4SharedBusP2EP)((crossbar, ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
+    })
+
+    /* packet Peer to Endpoint (L2R) lookup table */
+    axiCrossbar.addPipelining(packetTxAxi4SharedBusL2R)((crossbar, ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
     })
 
     /* instruction and data RAM slave */
     axiCrossbar.addPipelining(ram.io.axi)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <<  ctrl.writeRsp
-      crossbar.readRsp               <<  ctrl.readRsp
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
       // mnemonic: / cuts the ready path, - stages valid and data
     })
 
@@ -464,10 +509,6 @@ class Finka(val config: FinkaConfig) extends Component{
         timerCtrl.io.apb -> (0x20000, 4 kB)
       )
     )
-
-    val lookupTable = LookupMemAxi4(33, 128, busconfig, axiClockDomain)
-    lookupTable.io.ctrlbus << lookupAxi4SharedBus.toAxi4()
-    //val x =  Axi4SharedToBram(addressAxiWidth = 8, addressBRAMWidth = 8, dataWidth = 32, idWidth = 0)
   }
 
   val prefix = new ClockingArea(axiClockDomain) {
@@ -498,20 +539,6 @@ class Finka(val config: FinkaConfig) extends Component{
   io.update5 := prefix.regs(5)
   io.update6 := prefix.regs(6)
   io.do_update := prefix.do_update
-
-  val lookupRxSessionID = new ClockingArea(axiClockDomain) {
-
-    val counter = Reg(U(0, 6 bits))
-
-    // pretend to lookup at index 0x20
-    //axi.lookupTable.io.clk := rxClockDomain.readClockWire
-    //axi.lookupTable.io.rst := rxClockDomain.readResetWire
-    axi.lookupTable.io.en := True
-    axi.lookupTable.io.wr := False
-    axi.lookupTable.io.wrData := 0
-    axi.lookupTable.io.addr := counter.resized
-    counter := counter + 1
-  }
 
   // packet rx area
   val packetRx = new ClockingArea(axiClockDomain) {
@@ -552,23 +579,70 @@ class Finka(val config: FinkaConfig) extends Component{
       packetReader.io.ctrlbus << packetRxAxi4SharedBusReader.toAxi4()
 //    }
   }
-  // connect AXIS RX from Corundum to Finka RX path
+  // connect AXIS RX from Corundum CMAC to Finka RX path
   io.s_axis_rx >> packetRx.sink
+  // connect AXIS RX from Finka RX path to Corundum PCIe
   io.m_axis_rx << packetRx.source
 
   // packet tx area
   val packetTx = new ClockingArea(axiClockDomain) {
+    // packet writer driven by RISC-V
     val packetTxAxi4SharedBusWriter = Axi4Shared(busconfig)
     val packetWriter = CorundumFrameWriterAxi4(corundumDataWidth, busconfig)
     packetWriter.io.ctrlbus << packetTxAxi4SharedBusWriter.toAxi4()
+
+    val sink = Stream(Fragment(CorundumFrame(corundumDataWidth, userWidth = 17)))
+    val source = Stream(Fragment(CorundumFrame(corundumDataWidth, userWidth = 17)))
+
+    val cpl_sink = Stream(Bits(16 bits))
+    val cpl_source = Stream(Bits(16 bits))
+
+    val tx = BlackwireTransmit(busconfig, include_chacha = true, has_busctrl = true)
+    // transmit packets
+    tx.io.sink << sink
+    // handshake packets from RISC-V
+    tx.io.sink_handshake << packetWriter.io.output
+    source << tx.io.source
+
+    // transmit completions
+    tx.io.cpl_sink << cpl_sink
+    cpl_source << tx.io.cpl_source
+
+    // TX key LUT driven by RISC-V
+    val packetTxAxi4SharedBusTxKey = Axi4Shared(busconfig)
+    tx.io.ctrl_txkey << packetTxAxi4SharedBusTxKey.toAxi4()
+
+    // Peer to Session LUT driven by RISC-V
+    val packetTxAxi4SharedBusP2S = Axi4Shared(busconfig)
+    tx.io.ctrl_p2s << packetTxAxi4SharedBusP2S.toAxi4()
+
+    // Peer to Endpoint (P2EP) LUT driven by RISC-V
+    val packetTxAxi4SharedBusP2EP = Axi4Shared(busconfig)
+    tx.io.ctrl_p2ep << packetTxAxi4SharedBusP2EP.toAxi4()
+
+    // Local to Remote Session (L2R) LUT driven by RISC-V
+    val packetTxAxi4SharedBusL2R = Axi4Shared(busconfig)
+    tx.io.ctrl_l2r << packetTxAxi4SharedBusL2R.toAxi4()
+
   }
-  // connect AXIS RX from Finka to Corundum
-  io.m_axis_tx << packetTx.packetWriter.io.output
+  // connect AXIS TX from Corundum PCIe to Finka TX path
+  io.s_axis_tx >> packetTx.sink
+  // connect AXIS TX from Finka TX path to Corundum CMAC
+  io.m_axis_tx << packetTx.source
+
+  // connect AXIS TX Corundum CMAC completions to Finka TX completion return path
+  io.s_axis_tx_cpl >> packetTx.cpl_sink
+  // connect AXIS TX completions from Finka TX path to Corundum PCIe
+  io.m_axis_tx_cpl << packetTx.cpl_source
 
   // connect AXI4
-  packetTx.packetTxAxi4SharedBusWriter << axi.packetTxAxi4SharedBusWriter
   packetRx.packetRxAxi4SharedBusReader << axi.packetRxAxi4SharedBusReader
+  packetTx.packetTxAxi4SharedBusWriter << axi.packetTxAxi4SharedBusWriter
   packetRx.packetRxAxi4SharedBusRxKey << axi.packetRxAxi4SharedBusRxKey
+  packetTx.packetTxAxi4SharedBusTxKey << axi.packetTxAxi4SharedBusTxKey
+  packetTx.packetTxAxi4SharedBusP2S << axi.packetTxAxi4SharedBusP2S
+  packetTx.packetTxAxi4SharedBusP2EP << axi.packetTxAxi4SharedBusP2EP
+  packetTx.packetTxAxi4SharedBusL2R << axi.packetTxAxi4SharedBusL2R
   prefix.prefixAxi4Bus << axi.prefixAxi4SharedBus.toAxi4()
 
   io.gpioA              <> axi.gpioACtrl.io.gpio
