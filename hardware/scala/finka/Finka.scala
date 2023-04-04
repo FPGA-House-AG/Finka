@@ -314,6 +314,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val prefixAxi4SharedBus = interconnect.copy()
     val packetTxAxi4SharedBusWriter = interconnect.copy()
     val packetRxAxi4SharedBusReader = interconnect.copy()
+    val packetTxAxi4SharedBusPktHdr = interconnect.copy()
     val packetRxAxi4SharedBusRxKey = interconnect.copy()
     val packetTxAxi4SharedBusTxKey = interconnect.copy()
     val packetTxAxi4SharedBusP2S = interconnect.copy()
@@ -371,6 +372,7 @@ class Finka(val config: FinkaConfig) extends Component{
       corundumAxi4SharedBus           -> (0x00C00000L, 4 kB),
       packetTxAxi4SharedBusWriter     -> (0x00C01000L, 4 kB),
       packetRxAxi4SharedBusReader     -> (0x00C02000L, 4 kB),
+      packetTxAxi4SharedBusPktHdr     -> (0x00C03000L, 4 kB),
       prefixAxi4SharedBus             -> (0x00C04000L, 4 kB),
       // 1024 keys for 4 (curr, next, prev, unused) sessions/per * 256 peers
       // each key is 32 bytes (256 bits)
@@ -390,8 +392,8 @@ class Finka(val config: FinkaConfig) extends Component{
       core.iBus         -> List(ram.io.axi),
       // CPU data bus can access all slaves
       //@build should check for double entries
-      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R),
-      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R)
+      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R),
+      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R)
     )
 
     /* AXI Peripheral Bus (APB) slave */
@@ -428,6 +430,14 @@ class Finka(val config: FinkaConfig) extends Component{
 
     /* packet RX reader slave */
     axiCrossbar.addPipelining(packetRxAxi4SharedBusReader)((crossbar, ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
+    })
+
+    /* packet TX packet header configuration slave */
+    axiCrossbar.addPipelining(packetTxAxi4SharedBusPktHdr)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <-/<  ctrl.writeRsp
@@ -608,6 +618,10 @@ class Finka(val config: FinkaConfig) extends Component{
     tx.io.cpl_sink << cpl_sink
     cpl_source << tx.io.cpl_source
 
+    // TX packet header configuration driven by RISC-V
+    val packetTxAxi4SharedBusPktHdr = Axi4Shared(busconfig)
+    tx.io.ctrl_hdr << packetTxAxi4SharedBusPktHdr.toAxi4()
+
     // TX key LUT driven by RISC-V
     val packetTxAxi4SharedBusTxKey = Axi4Shared(busconfig)
     tx.io.ctrl_txkey << packetTxAxi4SharedBusTxKey.toAxi4()
@@ -623,7 +637,6 @@ class Finka(val config: FinkaConfig) extends Component{
     // Local to Remote Session (L2R) LUT driven by RISC-V
     val packetTxAxi4SharedBusL2R = Axi4Shared(busconfig)
     tx.io.ctrl_l2r << packetTxAxi4SharedBusL2R.toAxi4()
-
   }
   // connect AXIS TX from Corundum PCIe to Finka TX path
   io.s_axis_tx >> packetTx.sink
@@ -638,6 +651,7 @@ class Finka(val config: FinkaConfig) extends Component{
   // connect AXI4
   packetRx.packetRxAxi4SharedBusReader << axi.packetRxAxi4SharedBusReader
   packetTx.packetTxAxi4SharedBusWriter << axi.packetTxAxi4SharedBusWriter
+  packetTx.packetTxAxi4SharedBusPktHdr << axi.packetTxAxi4SharedBusPktHdr
   packetRx.packetRxAxi4SharedBusRxKey << axi.packetRxAxi4SharedBusRxKey
   packetTx.packetTxAxi4SharedBusTxKey << axi.packetTxAxi4SharedBusTxKey
   packetTx.packetTxAxi4SharedBusP2S << axi.packetTxAxi4SharedBusP2S
