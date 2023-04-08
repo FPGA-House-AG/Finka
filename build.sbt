@@ -21,7 +21,7 @@ lazy val finka = (project in file("."))
   .dependsOn(vexRiscv)
   .dependsOn(spinalCorundum)
 
-lazy val vexRiscv = RootProject(uri("https://github.com/SpinalHDL/VexRiscv.git#f0bb6e94e4be6eeccade29210263c5ff305fc227"))
+lazy val vexRiscv = RootProject(uri("https://github.com/SpinalHDL/VexRiscv.git#c52433575dec04f10063b2fd7cebd0545c8b1be9"))
 
 lazy val spinalCorundum = ProjectRef(file("../SpinalCorundum"), "spinalCorundum") // e033b3d56f620577ac5376d00d68232970389b3d
 
