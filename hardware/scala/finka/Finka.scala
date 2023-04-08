@@ -738,7 +738,7 @@ object FinkaWithMemoryInit{
   }
 }
 
-object FinkaWireguard{
+object FinkaWireguard {
   def main(args: Array[String]) {
     val config = Config.spinal.copy(targetDirectory = "build/rtl/wireguard")
     val vhdlReport = config.generateVhdl({
