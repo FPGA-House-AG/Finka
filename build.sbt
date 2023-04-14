@@ -20,10 +20,13 @@ lazy val finka = (project in file("."))
   )
   .dependsOn(vexRiscv)
   .dependsOn(spinalCorundum)
+  .dependsOn(blackwireSpinal)
 
 lazy val vexRiscv = RootProject(uri("https://github.com/SpinalHDL/VexRiscv.git#c52433575dec04f10063b2fd7cebd0545c8b1be9"))
+//lazy val vexRiscv = RootProject(file("../VexRiscv.pinned"))
 
-lazy val spinalCorundum = ProjectRef(file("../SpinalCorundum"), "spinalCorundum") // e033b3d56f620577ac5376d00d68232970389b3d
+lazy val spinalCorundum = ProjectRef(file("../SpinalCorundum"), "spinalCorundum")
+lazy val blackwireSpinal = ProjectRef(file("../BlackwireSpinal"), "blackwireSpinal")
 
 fork := true
 // forward standard input of the sbt process to the forked process
