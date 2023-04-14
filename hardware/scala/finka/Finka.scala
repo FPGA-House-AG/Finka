@@ -309,7 +309,7 @@ class Finka(val config: FinkaConfig) extends Component{
       println("[WARNING] Axi4SharedOnChipRam is NOT initialized.")
     }
 
-    // crossbar to slaves
+    // crossbar to slaves interconnects
     val corundumAxi4SharedBus = interconnect.copy()
     val prefixAxi4SharedBus = interconnect.copy()
     val packetTxAxi4SharedBusWriter = interconnect.copy()
@@ -320,6 +320,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val packetTxAxi4SharedBusP2S = interconnect.copy()
     val packetTxAxi4SharedBusP2EP = interconnect.copy()
     val packetTxAxi4SharedBusL2R = interconnect.copy()
+    val packetTxAxi4SharedBusTxCounter = interconnect.copy()
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
     val pcieAxi4SharedBus = pcieAxi4Bus.toShared()
@@ -374,6 +375,9 @@ class Finka(val config: FinkaConfig) extends Component{
       packetRxAxi4SharedBusReader     -> (0x00C02000L, 4 kB),
       packetTxAxi4SharedBusPktHdr     -> (0x00C03000L, 4 kB),
       prefixAxi4SharedBus             -> (0x00C04000L, 4 kB),
+
+      packetTxAxi4SharedBusTxCounter  -> (0x00C05000L, 4 kB),
+
       // 1024 keys for 4 (curr, next, prev, unused) sessions/per * 256 peers
       // each key is 32 bytes (256 bits)
       // 32 kiB or 0x8000 bytes
@@ -392,8 +396,8 @@ class Finka(val config: FinkaConfig) extends Component{
       core.iBus         -> List(ram.io.axi),
       // CPU data bus can access all slaves
       //@build should check for double entries
-      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R),
-      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R)
+      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter),
+      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter)
     )
 
     /* AXI Peripheral Bus (APB) slave */
@@ -484,6 +488,14 @@ class Finka(val config: FinkaConfig) extends Component{
       crossbar.readRsp               <-/<  ctrl.readRsp
     })
 
+    /* packet TX nonce counter lookup table */
+    axiCrossbar.addPipelining(packetTxAxi4SharedBusTxCounter)((crossbar, ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
+    })
+
     /* instruction and data RAM slave */
     axiCrossbar.addPipelining(ram.io.axi)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
@@ -559,35 +571,16 @@ class Finka(val config: FinkaConfig) extends Component{
     val sink = Stream(Fragment(CorundumFrame(corundumDataWidth)))
     val source = Stream(Fragment(CorundumFrame(corundumDataWidth)))
 
-//    // RISC-V should receive Wireguard Type 4 data messages
-//    (type4_to_riscv) generate new Area {
-//      // drop when flow stash cannot accept a full packet (without backpressure)
-//      val dropOnFull = CorundumFrameDrop(corundumDataWidth)
-//      dropOnFull.io.sink << sink
-//  
-//      // ready asserted during packet input, !ready if no room for full packet
-//      val stash = CorundumFrameFlowStash(corundumDataWidth, 32, 24)
-//      stash.io.sink << dropOnFull.io.source
-//      // drop packets when the FlowStash applies backpressure
-//      dropOnFull.io.drop := !stash.io.sink.ready
-//      // convert from AXIS to AXIMM, CPU can read AXIS words
-//      val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
-//      packetReader.io.input << stash.io.source
-//    }
-//    // RISC-V should NOT receive Wireguard Type 4 data messages
-//    (!type4_to_riscv) generate new Area {
-//
-      val rx = BlackwireReceive(busconfig, include_chacha = true)
-      rx.io.sink << sink
-      source << rx.io.source
-      rx.io.ctrl_rxkey << packetRxAxi4SharedBusRxKey.toAxi4()
+    val rx = BlackwireReceive(busconfig, include_chacha = true)
+    rx.io.sink << sink
+    source << rx.io.source
+    rx.io.ctrl_rxkey << packetRxAxi4SharedBusRxKey.toAxi4()
 
-      val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
-      packetReader.io.input << rx.io.source_handshake
+    val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
+    packetReader.io.input << rx.io.source_handshake
 
-      // connect to bus
-      packetReader.io.ctrlbus << packetRxAxi4SharedBusReader.toAxi4()
-//    }
+    // connect to bus
+    packetReader.io.ctrlbus << packetRxAxi4SharedBusReader.toAxi4()
   }
   // connect AXIS RX from Corundum CMAC to Finka RX path
   io.s_axis_rx >> packetRx.sink
@@ -637,6 +630,10 @@ class Finka(val config: FinkaConfig) extends Component{
     // Local to Remote Session (L2R) LUT driven by RISC-V
     val packetTxAxi4SharedBusL2R = Axi4Shared(busconfig)
     tx.io.ctrl_l2r << packetTxAxi4SharedBusL2R.toAxi4()
+
+    // TX nonce counter LUT cleared by RISC-V
+    val packetTxAxi4SharedBusTxCounter = Axi4Shared(busconfig)
+    tx.io.ctrl_txc << packetTxAxi4SharedBusTxCounter.toAxi4()
   }
   // connect AXIS TX from Corundum PCIe to Finka TX path
   io.s_axis_tx >> packetTx.sink
@@ -657,6 +654,7 @@ class Finka(val config: FinkaConfig) extends Component{
   packetTx.packetTxAxi4SharedBusP2S << axi.packetTxAxi4SharedBusP2S
   packetTx.packetTxAxi4SharedBusP2EP << axi.packetTxAxi4SharedBusP2EP
   packetTx.packetTxAxi4SharedBusL2R << axi.packetTxAxi4SharedBusL2R
+  packetTx.packetTxAxi4SharedBusTxCounter << axi.packetTxAxi4SharedBusTxCounter
   prefix.prefixAxi4Bus << axi.prefixAxi4SharedBus.toAxi4()
 
   io.gpioA              <> axi.gpioACtrl.io.gpio
