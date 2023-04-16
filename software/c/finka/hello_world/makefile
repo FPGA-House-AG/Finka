@@ -71,7 +71,9 @@ OBJS := $(addprefix $(OBJDIR)/,$(OBJS))
 
 all: $(OBJDIR)/$(PROJ_NAME).elf $(OBJDIR)/$(PROJ_NAME).hex $(OBJDIR)/$(PROJ_NAME).asm $(OBJDIR)/$(PROJ_NAME).v
 
-$(OBJDIR)/%.elf: $(OBJS) | $(OBJDIR)
+$(OBJS): | $(OBJDIR)
+
+$(OBJDIR)/%.elf: $(OBJS)
 	$(RISCV_CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBSINC) $(LIBS)
 
 %.hex: %.elf
