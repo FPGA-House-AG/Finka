@@ -28,9 +28,9 @@ sim_batch_debug:
 rtl:
 	set -e
 	make -j8 -C software/c/finka/hello_world clean
-	make -j8 -C software/c/finka/hello_world clean all DEBUG=yes
+	make -j8 -C software/c/finka/hello_world all DEBUG=yes
 	make -j8 -C software/c/finka/pico-hello clean
-	make -j8 -C software/c/finka/pico-hello clean all DEBUG=yes
+	make -j8 -C software/c/finka/pico-hello all DEBUG=yes
 	sbt "runMain finka.FinkaWithMemoryInit; runMain finka.FinkaWireguard"
 
 wg:
