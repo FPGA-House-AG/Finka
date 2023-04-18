@@ -48,11 +48,12 @@ import spinal.lib.bus.misc.SizeMapping
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
 
-// SpinalCorundum
-import corundum._
-
 // Blackwire
 import blackwire._
+// SpinalCorundum
+import corundum._
+// ScalablePipelinedLookup
+////import scalablePipelinedLookup._
 
 case class FinkaConfig(axiFrequency : HertzNumber,
                        onChipRamSize : BigInt,
@@ -258,8 +259,8 @@ class Finka(val config: FinkaConfig) extends Component{
   io.m_axis_tx.addAttribute("mark_debug")
   io.s_axis_tx.addAttribute("mark_debug")
 
-  io.m_axis_tx_cpl.addAttribute("mark_debug")
-  io.s_axis_tx_cpl.addAttribute("mark_debug")
+  //io.m_axis_tx_cpl.addAttribute("mark_debug")
+  //io.s_axis_tx_cpl.addAttribute("mark_debug")
 
   val resetCtrlClockDomain = ClockDomain(
     clock = io.clk,
@@ -321,6 +322,8 @@ class Finka(val config: FinkaConfig) extends Component{
     val packetTxAxi4SharedBusP2EP = interconnect.copy()
     val packetTxAxi4SharedBusL2R = interconnect.copy()
     val packetTxAxi4SharedBusTxCounter = interconnect.copy()
+    ////val packetTxAxi4SharedBusIP = interconnect.copy()
+    val accelAxi4SharedBusX25519 = interconnect.copy()
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
     val pcieAxi4SharedBus = pcieAxi4Bus.toShared()
@@ -375,17 +378,18 @@ class Finka(val config: FinkaConfig) extends Component{
       packetRxAxi4SharedBusReader     -> (0x00C02000L, 4 kB),
       packetTxAxi4SharedBusPktHdr     -> (0x00C03000L, 4 kB),
       prefixAxi4SharedBus             -> (0x00C04000L, 4 kB),
-
-      packetTxAxi4SharedBusTxCounter  -> (0x00C05000L, 4 kB),
+      accelAxi4SharedBusX25519        -> (0x00C05000L, 4 kB),
+      ////packetTxAxi4SharedBusIP         -> (0x00C06000L, 4 kB),
+      packetTxAxi4SharedBusTxCounter  -> (0x00C10000L, 4 kB),
 
       // 1024 keys for 4 (curr, next, prev, unused) sessions/per * 256 peers
       // each key is 32 bytes (256 bits)
       // 32 kiB or 0x8000 bytes
-      packetRxAxi4SharedBusRxKey      -> (0x00C08000L, 32 kB),
-      packetTxAxi4SharedBusTxKey      -> (0x00C10000L, 32 kB),
-      packetTxAxi4SharedBusP2S        -> (0x00C18000L, 32 kB),
-      packetTxAxi4SharedBusP2EP       -> (0x00C20000L, 32 kB),
-      packetTxAxi4SharedBusL2R        -> (0x00C28000L, 32 kB),
+      packetRxAxi4SharedBusRxKey      -> (0x00C20000L, 32 kB),
+      packetTxAxi4SharedBusTxKey      -> (0x00C30000L, 32 kB),
+      packetTxAxi4SharedBusP2S        -> (0x00C40000L, 32 kB),
+      packetTxAxi4SharedBusP2EP       -> (0x00C50000L, 32 kB),
+      packetTxAxi4SharedBusL2R        -> (0x00C60000L, 32 kB),
       apbBridge.io.axi                -> (0x00F00000L, 1 MB)
     )
 
@@ -396,8 +400,8 @@ class Finka(val config: FinkaConfig) extends Component{
       core.iBus         -> List(ram.io.axi),
       // CPU data bus can access all slaves
       //@build should check for double entries
-      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter),
-      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter)
+      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter, accelAxi4SharedBusX25519/*, packetTxAxi4SharedBusIP*/),
+      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter, accelAxi4SharedBusX25519/*, packetTxAxi4SharedBusIP*/)
     )
 
     /* AXI Peripheral Bus (APB) slave */
@@ -496,6 +500,24 @@ class Finka(val config: FinkaConfig) extends Component{
       crossbar.readRsp               <-/<  ctrl.readRsp
     })
 
+    /* packet TX nonce counter lookup table */
+    /* ////
+    axiCrossbar.addPipelining(packetTxAxi4SharedBusIP)((crossbar, ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
+    })
+    */ ////
+
+    /* X25519 accelerator */
+    axiCrossbar.addPipelining(accelAxi4SharedBusX25519)((crossbar, ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <-/<  ctrl.writeRsp
+      crossbar.readRsp               <-/<  ctrl.readRsp
+    })
+
     /* instruction and data RAM slave */
     axiCrossbar.addPipelining(ram.io.axi)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
@@ -515,7 +537,7 @@ class Finka(val config: FinkaConfig) extends Component{
 
     // PCIe bus master
     axiCrossbar.addPipelining(pcieAxi4SharedBus)((pcie, crossbar) => {
-      pcie.sharedCmd             >>  crossbar.sharedCmd
+      pcie.sharedCmd.halfPipe()   >>  crossbar.sharedCmd
       pcie.writeData             >/->  crossbar.writeData
       pcie.writeRsp              <-/<  crossbar.writeRsp
       pcie.readRsp               <-/<  crossbar.readRsp
@@ -531,6 +553,9 @@ class Finka(val config: FinkaConfig) extends Component{
         timerCtrl.io.apb -> (0x20000, 4 kB)
       )
     )
+
+    val x25519 = X25519Axi4(busconfig)
+    x25519.io.ctrlbus << accelAxi4SharedBusX25519.toAxi4()
   }
 
   val prefix = new ClockingArea(axiClockDomain) {
@@ -561,6 +586,14 @@ class Finka(val config: FinkaConfig) extends Component{
   io.update5 := prefix.regs(5)
   io.update6 := prefix.regs(6)
   io.do_update := prefix.do_update
+
+  //// val packetRxTx = new ClockingArea(axiClockDomain) {
+  ////   // IP lookup updated/written by RISC-V
+  ////   val ipl = LookupTop()
+  ////   val packetRxTxAxi4SharedIP = Axi4Shared(busconfig)
+  ////   ipl.io.ctrl_ipl << packetRxTxAxi4SharedIP.toAxi4.toAxi4Lite()
+  //// }
+  //// packetRxTx.packetRxTxAxi4SharedIP << axi.packetRxTxAxi4SharedIP
 
   // packet rx area
   val packetRx = new ClockingArea(axiClockDomain) {
@@ -768,15 +801,57 @@ object FinkaSim {
     // synchronous resets, see Config.scala
     .withConfig(Config.spinal)
     .allOptimisation
-    //.withGhdl.addRunFlag("--unbuffered").addRunFlag("--ieee-asserts=disable").addRunFlag("--assert-level=none").addRunFlag("--backtrace-severity=warning")
+    .withGhdl.addRunFlag("--unbuffered").addRunFlag("--ieee-asserts=disable").addRunFlag("--assert-level=none").addRunFlag("--backtrace-severity=warning")
+    //.withWave
+
     //.withVerilator.addSimulatorFlag("-Wno-MULTIDRIVEN") // to simulate, even with true dual port RAM
     //.withXSim.withXilinxDevice("xcvu35p-fsvh2104-2-e")
     // LD_LIBRARY_PATH=/opt/Xilinx//Vivado/2021.2/lib/lnx64.o stdbuf -oL -eL sbt "runMain finka.FinkaSim"
+    
+    simConfig
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/bus_pkg1.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/AEAD_encryption_wrapper_kar.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/AEAD_encryptor_kar.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/ChaCha20_128.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/ChaCha_int.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/col_round.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/diag_round.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/half_round.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/mod_red_1305.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/mul_136_kar.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/mul136_mod_red.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/mul_36.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/mul_68_kar.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/mul_gen_0.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/mul_red_pipeline.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/Poly_1305_pipe_kar.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/Poly_1305_pipe_top_kar.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/q_round.vhd")
+    .addRtl(s"../ChaCha20Poly1305/src_dsp_opt/r_pow_n_kar.vhd")
+
+    simConfig
+    .addRtl(s"../x25519/src_ecdh_FSM/add_255_mod_red.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/clamp_k_u.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/kP_FSM.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/kP_round_fsm.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/mod_inv_FSM.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/mod_red_25519.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/mul_136_kar.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/mul_255_kar.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/mul_255_mod_red.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/mul_36.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/mul_4_255_mod_red.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/mul_68_kar.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/mul_A_255_mod_red.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/mul_gen_0.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/sub_255_mod_red.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/X25519_FSM_AXI_ST.vhd")
+    .addRtl(s"../x25519/src_ecdh_FSM/X25519_FSM.vhd")
 
     // !! set to true to generate a wavefrom dump for GTKWave -f 
     val waveform = false
     if (waveform) simConfig.withFstWave//.withWaveDepth(10) // does not work with Verilator, use SimTimeout()
-
+//
     simConfig.compile{
 
       val socConfig = FinkaConfig.default.copy(
