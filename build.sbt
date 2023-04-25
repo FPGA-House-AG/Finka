@@ -21,12 +21,14 @@ lazy val finka = (project in file("."))
   .dependsOn(vexRiscv)
   .dependsOn(spinalCorundum)
   .dependsOn(blackwireSpinal)
+  .dependsOn(scalablePipelinedLookup)
 
 lazy val vexRiscv = RootProject(uri("https://github.com/SpinalHDL/VexRiscv.git#c52433575dec04f10063b2fd7cebd0545c8b1be9"))
 //lazy val vexRiscv = RootProject(file("../VexRiscv.pinned"))
 
 lazy val spinalCorundum = ProjectRef(file("../SpinalCorundum"), "spinalCorundum")
 lazy val blackwireSpinal = ProjectRef(file("../BlackwireSpinal"), "blackwireSpinal")
+lazy val scalablePipelinedLookup = ProjectRef(file("../scalable-pipelined-lookup-fpga"), "scalablePipelinedLookup")
 
 fork := true
 // forward standard input of the sbt process to the forked process
