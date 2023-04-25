@@ -20,13 +20,13 @@
 #define AXI_RX      ((volatile uint32_t *)AXI_M1 + 0x2000/4)
 #define AXI_LUT     ((volatile uint32_t *)AXI_M1 + 0x3000/4)
 #define AXI_PRF     ((volatile uint32_t *)AXI_M1 + 0x4000/4)
-#define AXI_RXK     ((volatile uint32_t *)AXI_M1 + 0x8000/4)
+#define AXI_X25     ((volatile uint32_t *)AXI_M1 + 0x5000/4)
+#define AXI_IPL     ((volatile uint32_t *)AXI_M1 + 0x6000/4)
+#define AXI_TXC     ((volatile uint32_t *)AXI_M1 + 0x10000/4)
+#define AXI_RXK     ((volatile uint32_t *)AXI_M1 + 0x20000/4)
+#define AXI_TXK     ((volatile uint32_t *)AXI_M1 + 0x30000/4)
+#define AXI_P2S     ((volatile uint32_t *)AXI_M1 + 0x40000/4)
+#define AXI_P2EP    ((volatile uint32_t *)AXI_M1 + 0x50000/4)
+#define AXI_L2R     ((volatile uint32_t *)AXI_M1 + 0x60000/4)
 
-//     corundumAxi4SharedBus           -> (0x00C00000L, 4 kB),
-//     packetTxAxi4SharedBusWriter     -> (0x00C01000L, 4 kB),
-//     packetRxAxi4SharedBusReader     -> (0x00C02000L, 4 kB),
-//     lookupAxi4SharedBus             -> (0x00C03000L, 4 kB),
-//     prefixAxi4SharedBus             -> (0x00C04000L, 4 kB),
-//     packetRxAxi4SharedBusRxKey      -> (0x00C08000L, 4 kB),
-//     apbBridge.io.axi                -> (0x00F00000L, 1 MB)//
 #endif /* __MURAX_H__ */

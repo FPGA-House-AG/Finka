@@ -27,6 +27,8 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.amba4.axi._
+import spinal.lib.bus.amba4.axilite._
+
 import spinal.lib.com.jtag.Jtag
 import spinal.lib.com.jtag.sim.JtagTcp
 import spinal.lib.com.uart.sim.{UartDecoder, UartEncoder}
@@ -52,8 +54,36 @@ import scala.collection.Seq
 import blackwire._
 // SpinalCorundum
 import corundum._
+
+
+
+import spinal.core._
+import spinal.core.sim._
+import spinal.lib.bus.amba4.axi._
+import spinal.lib._
+import spinal.lib.bus.amba4.axi.sim.{Axi4ReadOnlyMasterAgent, Axi4ReadOnlyMonitor, Axi4WriteOnlyMasterAgent, Axi4WriteOnlyMonitor}
+import spinal.lib.bus.amba4.axilite._
+import spinal.lib.bus.amba4.axilite.AxiLite4Utils.Axi4Rich
+import spinal.lib.bus.amba4.axilite.sim.{AxiLite4ReadOnlyMonitor, AxiLite4ReadOnlySlaveAgent, AxiLite4WriteOnlyMonitor, AxiLite4WriteOnlySlaveAgent}
+import spinal.lib.bus.misc.SizeMapping
+import spinal.lib.sim.ScoreboardInOrder
+import scala.collection.mutable
+import scala.util.Random
 // ScalablePipelinedLookup
-////import scalablePipelinedLookup._
+import scalablePipelinedLookup._
+
+
+
+class Axi4ToAxiLite4TesterComp(config: Axi4Config) extends Component {
+  val io = new Bundle {
+    val axi = slave(Axi4(config))
+    val axilite = master(AxiLite4(AxiLite4Config(addressWidth = config.addressWidth, dataWidth = config.dataWidth)))
+  }
+
+  io.axi.toLite() >> io.axilite
+}
+
+
 
 case class FinkaConfig(axiFrequency : HertzNumber,
                        onChipRamSize : BigInt,
@@ -322,7 +352,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val packetTxAxi4SharedBusP2EP = interconnect.copy()
     val packetTxAxi4SharedBusL2R = interconnect.copy()
     val packetTxAxi4SharedBusTxCounter = interconnect.copy()
-    ////val packetTxAxi4SharedBusIP = interconnect.copy()
+    val packetRxTxAxi4SharedBusIP = interconnect.copy()
     val accelAxi4SharedBusX25519 = interconnect.copy()
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
@@ -379,7 +409,7 @@ class Finka(val config: FinkaConfig) extends Component{
       packetTxAxi4SharedBusPktHdr     -> (0x00C03000L, 4 kB),
       prefixAxi4SharedBus             -> (0x00C04000L, 4 kB),
       accelAxi4SharedBusX25519        -> (0x00C05000L, 4 kB),
-      ////packetTxAxi4SharedBusIP         -> (0x00C06000L, 4 kB),
+      packetRxTxAxi4SharedBusIP       -> (0x00C06000L, 4 kB),
       packetTxAxi4SharedBusTxCounter  -> (0x00C10000L, 4 kB),
 
       // 1024 keys for 4 (curr, next, prev, unused) sessions/per * 256 peers
@@ -400,8 +430,8 @@ class Finka(val config: FinkaConfig) extends Component{
       core.iBus         -> List(ram.io.axi),
       // CPU data bus can access all slaves
       //@build should check for double entries
-      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter, accelAxi4SharedBusX25519/*, packetTxAxi4SharedBusIP*/),
-      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter, accelAxi4SharedBusX25519/*, packetTxAxi4SharedBusIP*/)
+      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter, accelAxi4SharedBusX25519, packetRxTxAxi4SharedBusIP),
+      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter, accelAxi4SharedBusX25519, packetRxTxAxi4SharedBusIP)
     )
 
     /* AXI Peripheral Bus (APB) slave */
@@ -500,15 +530,13 @@ class Finka(val config: FinkaConfig) extends Component{
       crossbar.readRsp               <-/<  ctrl.readRsp
     })
 
-    /* packet TX nonce counter lookup table */
-    /* ////
-    axiCrossbar.addPipelining(packetTxAxi4SharedBusIP)((crossbar, ctrl) => {
+    /* RX TX Allowed IP address lookup */
+    axiCrossbar.addPipelining(packetRxTxAxi4SharedBusIP)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <-/<  ctrl.writeRsp
       crossbar.readRsp               <-/<  ctrl.readRsp
     })
-    */ ////
 
     /* X25519 accelerator */
     axiCrossbar.addPipelining(accelAxi4SharedBusX25519)((crossbar, ctrl) => {
@@ -587,14 +615,6 @@ class Finka(val config: FinkaConfig) extends Component{
   io.update6 := prefix.regs(6)
   io.do_update := prefix.do_update
 
-  //// val packetRxTx = new ClockingArea(axiClockDomain) {
-  ////   // IP lookup updated/written by RISC-V
-  ////   val ipl = LookupTop()
-  ////   val packetRxTxAxi4SharedIP = Axi4Shared(busconfig)
-  ////   ipl.io.ctrl_ipl << packetRxTxAxi4SharedIP.toAxi4.toAxi4Lite()
-  //// }
-  //// packetRxTx.packetRxTxAxi4SharedIP << axi.packetRxTxAxi4SharedIP
-
   // packet rx area
   val packetRx = new ClockingArea(axiClockDomain) {
     val packetRxAxi4SharedBusReader = Axi4Shared(busconfig)
@@ -668,6 +688,36 @@ class Finka(val config: FinkaConfig) extends Component{
     val packetTxAxi4SharedBusTxCounter = Axi4Shared(busconfig)
     tx.io.ctrl_txc << packetTxAxi4SharedBusTxCounter.toAxi4()
   }
+
+  // rx and tx
+  val packetRxTx = new ClockingArea(axiClockDomain) {
+    // IP lookup updated/written by RISC-V
+    val ipl = LookupTop(config = LookupDataConfig(memInitTemplate = None))
+
+    val rx_ipl = Flow(Bits(32 bits))
+    val tx_ipl = Flow(Bits(32 bits))
+
+    val rx_ipl_res = Flow(UInt(11 bits))
+    val tx_ipl_res = Flow(UInt(11 bits))
+
+    val packetRxTxAxi4SharedBusIP = Axi4Shared(busconfig)
+    ipl.io.axi/*ctrl_ipl*/ << packetRxTxAxi4SharedBusIP.toAxi4.toLite()
+
+    // RX and TX paths do IP address lookups
+    ipl.io.lookup.apply(0) << rx_ipl
+    ipl.io.lookup.apply(1) << tx_ipl
+    // IP address lookup results returned to RX and TX paths
+    rx_ipl_res.valid   := ipl.io.result.apply(0).valid
+    rx_ipl_res.payload := ipl.io.result.apply(0).lookupResult.location
+    tx_ipl_res.valid   := ipl.io.result.apply(1).valid
+    tx_ipl_res.payload := ipl.io.result.apply(1).lookupResult.location
+  }
+  packetRxTx.packetRxTxAxi4SharedBusIP << axi.packetRxTxAxi4SharedBusIP
+  packetRxTx.rx_ipl << packetRx.rx.io.source_ipl
+  packetRxTx.tx_ipl << packetTx.tx.io.source_ipl
+  packetRxTx.rx_ipl_res >> packetRx.rx.io.sink_ipl
+  packetRxTx.tx_ipl_res >> packetTx.tx.io.sink_ipl
+
   // connect AXIS TX from Corundum PCIe to Finka TX path
   io.s_axis_tx >> packetTx.sink
   // connect AXIS TX from Finka TX path to Corundum CMAC
