@@ -28,11 +28,12 @@ import spinal.lib._
 import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.amba4.axi._
 import spinal.lib.bus.amba4.axilite._
+import spinal.lib.bus.amba4.axilite.AxiLite4Utils.Axi4Rich
+import spinal.lib.bus.misc.SizeMapping
 
 import spinal.lib.com.jtag.Jtag
 import spinal.lib.com.jtag.sim.JtagTcp
 import spinal.lib.com.uart.sim.{UartDecoder, UartEncoder}
-import spinal.core.sim.{SimPublic, TracingOff}
 
 import spinal.lib.com.uart.{Apb3UartCtrl, Uart, UartCtrlGenerics, UartCtrlMemoryMappedConfig}
 import spinal.lib.io.TriStateArray
@@ -40,14 +41,13 @@ import spinal.lib.misc.HexTools
 //import spinal.lib.soc.pinsec.{FinkaTimerCtrl, FinkaTimerCtrlExternal}
 import spinal.lib.system.debugger.{JtagAxi4SharedDebugger, JtagBridge, SystemDebugger, SystemDebuggerConfig}
 
-import spinal.lib.bus.misc.SizeMapping
-//import spinal.lib.bus.regif.AccessType._
-//import spinal.lib.bus.regif._
-//import spinal.lib.bus.regif.Document.CHeaderGenerator
-//import spinal.lib.bus.regif.Document.HtmlGenerator
-//import spinal.lib.bus.regif.Document.JsonGenerator
+import spinal.core.sim.{SimPublic, TracingOff}
 
+import scala.util.Random
+
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.ListBuffer
 import scala.collection.Seq
 
 // Blackwire
@@ -55,35 +55,8 @@ import blackwire._
 // SpinalCorundum
 import corundum._
 
-
-
-import spinal.core._
-import spinal.core.sim._
-import spinal.lib.bus.amba4.axi._
-import spinal.lib._
-import spinal.lib.bus.amba4.axi.sim.{Axi4ReadOnlyMasterAgent, Axi4ReadOnlyMonitor, Axi4WriteOnlyMasterAgent, Axi4WriteOnlyMonitor}
-import spinal.lib.bus.amba4.axilite._
-import spinal.lib.bus.amba4.axilite.AxiLite4Utils.Axi4Rich
-import spinal.lib.bus.amba4.axilite.sim.{AxiLite4ReadOnlyMonitor, AxiLite4ReadOnlySlaveAgent, AxiLite4WriteOnlyMonitor, AxiLite4WriteOnlySlaveAgent}
-import spinal.lib.bus.misc.SizeMapping
-import spinal.lib.sim.ScoreboardInOrder
-import scala.collection.mutable
-import scala.util.Random
 // ScalablePipelinedLookup
 import scalablePipelinedLookup._
-
-
-
-class Axi4ToAxiLite4TesterComp(config: Axi4Config) extends Component {
-  val io = new Bundle {
-    val axi = slave(Axi4(config))
-    val axilite = master(AxiLite4(AxiLite4Config(addressWidth = config.addressWidth, dataWidth = config.dataWidth)))
-  }
-
-  io.axi.toLite() >> io.axilite
-}
-
-
 
 case class FinkaConfig(axiFrequency : HertzNumber,
                        onChipRamSize : BigInt,
@@ -253,19 +226,6 @@ class Finka(val config: FinkaConfig) extends Component{
     val timerExternal = in(FinkaTimerCtrlExternal())
     val coreInterrupt = in Bool()
 
-    /* register interface to IP address lookup prefix update interface */
-    val update0 = out UInt(32 bits)
-    val update1 = out UInt(32 bits)
-    val update2 = out UInt(32 bits)
-    val update3 = out UInt(32 bits)
-    val update4 = out UInt(32 bits)
-    val update5 = out UInt(32 bits)
-    val update6 = out UInt(32 bits)
-    val do_update = out Bool()
-
-    val update = out UInt(64 bits)
-    val commit = out Bool()
-
     // AXI4 slave from (external) PCIe bridge
     val pcieAxi4Slave = slave(Axi4(pcieAxi4Config))
     
@@ -342,7 +302,6 @@ class Finka(val config: FinkaConfig) extends Component{
 
     // crossbar to slaves interconnects
     val corundumAxi4SharedBus = interconnect.copy()
-    val prefixAxi4SharedBus = interconnect.copy()
     val packetTxAxi4SharedBusWriter = interconnect.copy()
     val packetRxAxi4SharedBusReader = interconnect.copy()
     val packetTxAxi4SharedBusPktHdr = interconnect.copy()
@@ -353,7 +312,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val packetTxAxi4SharedBusL2R = interconnect.copy()
     val packetTxAxi4SharedBusTxCounter = interconnect.copy()
     val packetRxTxAxi4SharedBusIP = interconnect.copy()
-    val accelAxi4SharedBusX25519 = interconnect.copy()
+    ////val accelAxi4SharedBusX25519 = interconnect.copy()
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
     val pcieAxi4SharedBus = pcieAxi4Bus.toShared()
@@ -407,8 +366,8 @@ class Finka(val config: FinkaConfig) extends Component{
       packetTxAxi4SharedBusWriter     -> (0x00C01000L, 4 kB),
       packetRxAxi4SharedBusReader     -> (0x00C02000L, 4 kB),
       packetTxAxi4SharedBusPktHdr     -> (0x00C03000L, 4 kB),
-      prefixAxi4SharedBus             -> (0x00C04000L, 4 kB),
-      accelAxi4SharedBusX25519        -> (0x00C05000L, 4 kB),
+
+      ////accelAxi4SharedBusX25519        -> (0x00C05000L, 4 kB),
       packetRxTxAxi4SharedBusIP       -> (0x00C06000L, 4 kB),
       packetTxAxi4SharedBusTxCounter  -> (0x00C10000L, 4 kB),
 
@@ -430,8 +389,8 @@ class Finka(val config: FinkaConfig) extends Component{
       core.iBus         -> List(ram.io.axi),
       // CPU data bus can access all slaves
       //@build should check for double entries
-      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter, accelAxi4SharedBusX25519, packetRxTxAxi4SharedBusIP),
-      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, prefixAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter, accelAxi4SharedBusX25519, packetRxTxAxi4SharedBusIP)
+      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter/*, accelAxi4SharedBusX25519*/, packetRxTxAxi4SharedBusIP),
+      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter/*, accelAxi4SharedBusX25519*/, packetRxTxAxi4SharedBusIP)
     )
 
     /* AXI Peripheral Bus (APB) slave */
@@ -444,14 +403,6 @@ class Finka(val config: FinkaConfig) extends Component{
 
     /* corundum slave */
     axiCrossbar.addPipelining(corundumAxi4SharedBus)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /* prefix update slave */
-    axiCrossbar.addPipelining(prefixAxi4SharedBus)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <-/<  ctrl.writeRsp
@@ -538,13 +489,13 @@ class Finka(val config: FinkaConfig) extends Component{
       crossbar.readRsp               <-/<  ctrl.readRsp
     })
 
-    /* X25519 accelerator */
-    axiCrossbar.addPipelining(accelAxi4SharedBusX25519)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
+    /////* X25519 accelerator */
+    ////axiCrossbar.addPipelining(accelAxi4SharedBusX25519)((crossbar, ctrl) => {
+    ////  crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+    ////  crossbar.writeData            >/-> ctrl.writeData
+    ////  crossbar.writeRsp              <-/<  ctrl.writeRsp
+    ////  crossbar.readRsp               <-/<  ctrl.readRsp
+    ////})
 
     /* instruction and data RAM slave */
     axiCrossbar.addPipelining(ram.io.axi)((crossbar, ctrl) => {
@@ -582,38 +533,9 @@ class Finka(val config: FinkaConfig) extends Component{
       )
     )
 
-    val x25519 = X25519Axi4(busconfig)
-    x25519.io.ctrlbus << accelAxi4SharedBusX25519.toAxi4()
+    ////val x25519 = X25519Axi4(busconfig)
+    ////x25519.io.ctrlbus << accelAxi4SharedBusX25519.toAxi4()
   }
-
-  val prefix = new ClockingArea(axiClockDomain) {
-    val prefixAxi4Bus = Axi4(Axi4Config(32, 32, 2, useLock = false, useQos = false, useRegion = false/*, useStrb = false*/))
-  
-    val ctrl = new Axi4SlaveFactory(prefixAxi4Bus)
-    val reg_idx = ((ctrl.writeAddress & 0xFFF) / 4)
-  
-    val regs = Vec.tabulate(7)(i => ctrl.createWriteOnly(UInt(32 bits), address = 0x00C00000L + i * 4, bitOffset = 0))
-    val update = UInt(64 bits)
-    update := regs(0) @@ regs(1)
-    // match a range of addresses using OR of single addresses
-    val commit = 
-      /*ctrl.isWriting(address = 0x00C00000L) |
-      ctrl.isWriting(address = 0x00C00004L) |
-      ctrl.isWriting(address = 0x00C00008L) |
-      ctrl.isWriting(address = 0x00C0000cL) |
-      ctrl.isWriting(address = 0x00C00010L) |
-      ctrl.isWriting(address = 0x00C00014L) |*/
-      ctrl.isWriting(address = 0x00C00018L)
-    val do_update = RegNext(commit) init (False)
-  }
-  io.update0 := prefix.regs(0)
-  io.update1 := prefix.regs(1)
-  io.update2 := prefix.regs(2)
-  io.update3 := prefix.regs(3)
-  io.update4 := prefix.regs(4)
-  io.update5 := prefix.regs(5)
-  io.update6 := prefix.regs(6)
-  io.do_update := prefix.do_update
 
   // packet rx area
   val packetRx = new ClockingArea(axiClockDomain) {
@@ -738,16 +660,12 @@ class Finka(val config: FinkaConfig) extends Component{
   packetTx.packetTxAxi4SharedBusP2EP << axi.packetTxAxi4SharedBusP2EP
   packetTx.packetTxAxi4SharedBusL2R << axi.packetTxAxi4SharedBusL2R
   packetTx.packetTxAxi4SharedBusTxCounter << axi.packetTxAxi4SharedBusTxCounter
-  prefix.prefixAxi4Bus << axi.prefixAxi4SharedBus.toAxi4()
 
   io.gpioA              <> axi.gpioACtrl.io.gpio
   io.timerExternal      <> axi.timerCtrl.io.external
   io.uart               <> axi.uartCtrl.io.uart
   io.pcieAxi4Slave      <> axi.pcieAxi4Bus
   io.corundumAxi4Master <> axi.corundumAxi4SharedBus.toAxi4()
-
-  io.commit := prefix.commit
-  io.update := prefix.update
 
   // Execute the function renameAxiIO after the creation of the component
   addPrePopTask(() => CorundumFrame.renameAxiIO(io))
@@ -1124,24 +1042,6 @@ object FinkaSim {
         //}
 
       while (true) {
-        if (dut.io.commit.toBoolean) {
-          println("COMMIT #", commits_seen)
-          //printf("STRB : %04d\n", dut.prefix.ctrl.writeByteEnable.toLong.toBinaryString.toInt)
-          //printf("REG# : %X\n", dut.prefix.reg_idx.toLong)
-          //printf("UPDATE : %X\n", dut.io.update.toBigInt)
-          commits_seen += 1
-        }
-        //if (dut.prefix.committed.toBoolean) {
-        if (dut.io.do_update.toBoolean && false) {
-          printf("REG0 : %X\n", dut.io.update0.toLong)
-          printf("REG1 : %X\n", dut.io.update1.toLong)
-          printf("REG2 : %X\n", dut.io.update2.toLong)
-          printf("REG3 : %X\n", dut.io.update3.toLong)
-          printf("REG4 : %X\n", dut.io.update4.toLong)
-          printf("REG5 : %X\n", dut.io.update5.toLong)
-          printf("REG6 : %X\n", dut.io.update6.toLong)
-        }
-
         if (dut.io.s_axis_rx.valid.toBoolean & dut.io.s_axis_rx.ready.toBoolean) {
           printf("S_AXIS_RX VALID == %X\n", dut.io.s_axis_rx.valid.toBoolean.toInt)
           printf("S_AXIS_RX TLAST == %X\n", dut.io.s_axis_rx.last.toBoolean.toInt)
@@ -1169,7 +1069,6 @@ object FinkaSim {
         if (commits_seen > 4) cycles_post -= 1
         if (cycles_post == 0) simSuccess()
         if (commits_seen > 3) simSuccess()
-
       }
       //simSuccess()
     }
