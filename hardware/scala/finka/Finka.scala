@@ -361,26 +361,47 @@ class Finka(val config: FinkaConfig) extends Component{
 
     axiCrossbar.addSlaves(
       ram.io.axi                      -> (0x00800000L, onChipRamSize),
-      // @NOTE keep finka.h in sync for software
+
+    // @NOTE keep finka.h in sync for software
+
+      /* corundum slave */
       corundumAxi4SharedBus           -> (0x00C00000L, 4 kB),
+      /* packet TX writer slave */
       packetTxAxi4SharedBusWriter     -> (0x00C01000L, 4 kB),
+
+      /* packet RX reader slave */
       packetRxAxi4SharedBusReader     -> (0x00C02000L, 4 kB),
+      /* packet TX packet header configuration slave */
       packetTxAxi4SharedBusPktHdr     -> (0x00C03000L, 4 kB),
 
       ////accelAxi4SharedBusX25519        -> (0x00C05000L, 4 kB),
+      /* RX TX Allowed IP address lookup */
+      /* X25519 accelerator */
       packetRxTxAxi4SharedBusIP       -> (0x00C06000L, 4 kB),
+      /* packet TX nonce counter lookup table */
       packetTxAxi4SharedBusTxCounter  -> (0x00C10000L, 4 kB),
-
       // 1024 keys for 4 (curr, next, prev, unused) sessions/per * 256 peers
       // each key is 32 bytes (256 bits)
       // 32 kiB or 0x8000 bytes
+      /* packet RX key lookup table */
       packetRxAxi4SharedBusRxKey      -> (0x00C20000L, 32 kB),
+      /* packet TX key lookup table */
       packetTxAxi4SharedBusTxKey      -> (0x00C30000L, 32 kB),
+      /* packet Peer to Session (P2S) lookup table */
       packetTxAxi4SharedBusP2S        -> (0x00C40000L, 32 kB),
+      /* packet Peer to Endpoint (P2EP) lookup table */
       packetTxAxi4SharedBusP2EP       -> (0x00C50000L, 32 kB),
+      /* packet Peer to Endpoint (L2R) lookup table */
       packetTxAxi4SharedBusL2R        -> (0x00C60000L, 32 kB),
+      /* AXI Peripheral Bus (APB) slave */
       apbBridge.io.axi                -> (0x00F00000L, 1 MB)
     )
+
+    val peripheralSlaves = List(
+      apbBridge.io.axi, corundumAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader,
+      packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey,
+      packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R,
+      packetTxAxi4SharedBusTxCounter/*, accelAxi4SharedBusX25519*/, packetRxTxAxi4SharedBusIP)
 
     // sparse AXI4Shared crossbar
     // left side master, then for each master a List of accessible slaves on the right side
@@ -389,115 +410,20 @@ class Finka(val config: FinkaConfig) extends Component{
       core.iBus         -> List(ram.io.axi),
       // CPU data bus can access all slaves
       //@build should check for double entries
-      core.dBus         -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter/*, accelAxi4SharedBusX25519*/, packetRxTxAxi4SharedBusIP),
-      pcieAxi4SharedBus -> List(ram.io.axi, apbBridge.io.axi, corundumAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader, packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey, packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R, packetTxAxi4SharedBusTxCounter/*, accelAxi4SharedBusX25519*/, packetRxTxAxi4SharedBusIP)
+      core.dBus         -> (List(ram.io.axi) ++ peripheralSlaves),
+      pcieAxi4SharedBus -> (List(ram.io.axi) ++ peripheralSlaves)
     )
 
-    /* AXI Peripheral Bus (APB) slave */
-    axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar, bridge) => {
-      crossbar.sharedCmd.halfPipe() >> bridge.sharedCmd
-      crossbar.writeData            >/-> bridge.writeData
-      crossbar.writeRsp             <-/< bridge.writeRsp
-      crossbar.readRsp              <-/< bridge.readRsp
-    })
+    for (ctrl <- peripheralSlaves) {
+      axiCrossbar.addPipelining(corundumAxi4SharedBus)((crossbar, ctrl) => {
+        crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+        crossbar.writeData            >/-> ctrl.writeData
+        crossbar.writeRsp              <-/<  ctrl.writeRsp
+        crossbar.readRsp               <-/<  ctrl.readRsp
+      })
+    }
 
-    /* corundum slave */
-    axiCrossbar.addPipelining(corundumAxi4SharedBus)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /* packet TX writer slave */
-    axiCrossbar.addPipelining(packetTxAxi4SharedBusWriter)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /* packet RX reader slave */
-    axiCrossbar.addPipelining(packetRxAxi4SharedBusReader)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /* packet TX packet header configuration slave */
-    axiCrossbar.addPipelining(packetTxAxi4SharedBusPktHdr)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /* packet RX key lookup table */
-    axiCrossbar.addPipelining(packetRxAxi4SharedBusRxKey)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /* packet TX key lookup table */
-    axiCrossbar.addPipelining(packetTxAxi4SharedBusTxKey)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /* packet Peer to Session (P2S) lookup table */
-    axiCrossbar.addPipelining(packetTxAxi4SharedBusP2S)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /* packet Peer to Endpoint (P2EP) lookup table */
-    axiCrossbar.addPipelining(packetTxAxi4SharedBusP2EP)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /* packet Peer to Endpoint (L2R) lookup table */
-    axiCrossbar.addPipelining(packetTxAxi4SharedBusL2R)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /* packet TX nonce counter lookup table */
-    axiCrossbar.addPipelining(packetTxAxi4SharedBusTxCounter)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /* RX TX Allowed IP address lookup */
-    axiCrossbar.addPipelining(packetRxTxAxi4SharedBusIP)((crossbar, ctrl) => {
-      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-      crossbar.writeData            >/-> ctrl.writeData
-      crossbar.writeRsp              <-/<  ctrl.writeRsp
-      crossbar.readRsp               <-/<  ctrl.readRsp
-    })
-
-    /////* X25519 accelerator */
-    ////axiCrossbar.addPipelining(accelAxi4SharedBusX25519)((crossbar, ctrl) => {
-    ////  crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
-    ////  crossbar.writeData            >/-> ctrl.writeData
-    ////  crossbar.writeRsp              <-/<  ctrl.writeRsp
-    ////  crossbar.readRsp               <-/<  ctrl.readRsp
-    ////})
-
-    /* instruction and data RAM slave */
+    /* CPU instruction and data slave */
     axiCrossbar.addPipelining(ram.io.axi)((crossbar, ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
