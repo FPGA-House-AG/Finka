@@ -3,9 +3,7 @@ ThisBuild / scalaVersion := "2.11.12"
 ThisBuild / organization := "online.blackwire"
 
 val spinalVersion = "dev"
-val spinalDir = "../SpinalHDL.dev" // 4ec5b9db71767e1776091afca6c401903a4ad747
-//val spinalVersion = "dev"
-//val spinalDir = "../SpinalHDL.dev"
+val spinalDir = "../SpinalHDL.dev"
 
 lazy val finka = (project in file("."))
   .settings(
