@@ -210,9 +210,13 @@ class Finka(val config: FinkaConfig) extends Component{
   val interruptCount = 4
 
   val io = new Bundle{
-    // AXI4 Lite
+    // main clock for CPU and AXI interconnect, 250 MHz
     val clk     = in Bool()
     val rst     = in Bool()
+
+    // high speed clock specifically for crypto
+    val crypto_clk     = in Bool()
+    val crypto_rst     = in Bool()
 
     // Main components IO
     val jtag       = slave(Jtag())
@@ -251,6 +255,12 @@ class Finka(val config: FinkaConfig) extends Component{
 
   //io.m_axis_tx_cpl.addAttribute("mark_debug")
   //io.s_axis_tx_cpl.addAttribute("mark_debug")
+
+  val cryptoClockDomain = ClockDomain(
+    clock = io.crypto_clk,
+    reset = io.crypto_rst,
+    config = Config.syncConfig
+  )
 
   val resetCtrlClockDomain = ClockDomain(
     clock = io.clk,
