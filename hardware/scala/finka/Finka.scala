@@ -312,6 +312,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val packetTxAxi4SharedBusL2R = interconnect.copy()
     val packetTxAxi4SharedBusTxCounter = interconnect.copy()
     val packetRxTxAxi4SharedBusIP = interconnect.copy()
+    val packetRxAxi4SharedBusSession = interconnect.copy()
     ////val accelAxi4SharedBusX25519 = interconnect.copy()
 
     val pcieAxi4Bus = Axi4(pcieAxi4Config)
@@ -393,13 +394,16 @@ class Finka(val config: FinkaConfig) extends Component{
       packetTxAxi4SharedBusP2EP       -> (0x00C50000L, 32 kB),
       /* packet Peer to Endpoint (L2R) lookup table */
       packetTxAxi4SharedBusL2R        -> (0x00C60000L, 32 kB),
+      /* packet RX session lookup table */
+      packetRxAxi4SharedBusSession    -> (0x00C70000L, 32 kB),
+
       /* AXI Peripheral Bus (APB) slave */
       apbBridge.io.axi                -> (0x00F00000L, 1 MB)
     )
 
     val peripheralSlaves = List(
       apbBridge.io.axi, corundumAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader,
-      packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey,
+      packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusSession, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey,
       packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R,
       packetTxAxi4SharedBusTxCounter/*, accelAxi4SharedBusX25519*/, packetRxTxAxi4SharedBusIP)
 
@@ -466,8 +470,9 @@ class Finka(val config: FinkaConfig) extends Component{
 
   // packet rx area
   val packetRx = new ClockingArea(axiClockDomain) {
-    val packetRxAxi4SharedBusReader = Axi4Shared(busconfig)
-    val packetRxAxi4SharedBusRxKey = Axi4Shared(busconfig)
+    val packetRxAxi4SharedBusReader  = Axi4Shared(busconfig)
+    val packetRxAxi4SharedBusRxKey   = Axi4Shared(busconfig)
+    val packetRxAxi4SharedBusSession = Axi4Shared(busconfig)
 
     // TDATA+TKEEP Ethernet frame from Corundum
     val sink = Stream(Fragment(CorundumFrame(corundumDataWidth)))
@@ -477,6 +482,7 @@ class Finka(val config: FinkaConfig) extends Component{
     rx.io.sink << sink
     source << rx.io.source
     rx.io.ctrl_rxkey << packetRxAxi4SharedBusRxKey.toAxi4()
+    rx.io.ctrl_session << packetRxAxi4SharedBusSession.toAxi4()
 
     val packetReader = CorundumFrameReaderAxi4(corundumDataWidth, busconfig)
     packetReader.io.input << rx.io.source_handshake
@@ -587,6 +593,7 @@ class Finka(val config: FinkaConfig) extends Component{
   packetTx.packetTxAxi4SharedBusP2EP << axi.packetTxAxi4SharedBusP2EP
   packetTx.packetTxAxi4SharedBusL2R << axi.packetTxAxi4SharedBusL2R
   packetTx.packetTxAxi4SharedBusTxCounter << axi.packetTxAxi4SharedBusTxCounter
+  packetRx.packetRxAxi4SharedBusSession << axi.packetRxAxi4SharedBusSession
 
   io.gpioA              <> axi.gpioACtrl.io.gpio
   io.timerExternal      <> axi.timerCtrl.io.external
