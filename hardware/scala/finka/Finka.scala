@@ -250,8 +250,8 @@ class Finka(val config: FinkaConfig) extends Component{
     // completions from CMAC
     val s_axis_tx_cpl = slave(Stream(Bits(16 bits)))
   }
-  io.m_axis_tx.addAttribute("mark_debug")
-  io.s_axis_tx.addAttribute("mark_debug")
+  //io.m_axis_tx.addAttribute("mark_debug")
+  //io.s_axis_tx.addAttribute("mark_debug")
 
   //io.m_axis_tx_cpl.addAttribute("mark_debug")
   //io.s_axis_tx_cpl.addAttribute("mark_debug")
