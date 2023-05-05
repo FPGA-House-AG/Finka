@@ -215,8 +215,8 @@ class Finka(val config: FinkaConfig) extends Component{
     val rst     = in Bool()
 
     // high speed clock specifically for crypto
-    val crypto_clk     = in Bool()
-    val crypto_rst     = in Bool()
+    val turbo_clk     = in Bits(2 bits)
+    val turbo_rst     = in Bits(2 bits)
 
     // Main components IO
     val jtag       = slave(Jtag())
@@ -256,9 +256,15 @@ class Finka(val config: FinkaConfig) extends Component{
   //io.m_axis_tx_cpl.addAttribute("mark_debug")
   //io.s_axis_tx_cpl.addAttribute("mark_debug")
 
-  val cryptoClockDomain = ClockDomain(
-    clock = io.crypto_clk,
-    reset = io.crypto_rst,
+  val rxCryptoClockDomain = ClockDomain(
+    clock = io.turbo_clk(0),
+    reset = io.turbo_rst(0),
+    config = Config.syncConfig
+  )
+
+  val txCryptoClockDomain = ClockDomain(
+    clock = io.turbo_clk(1),
+    reset = io.turbo_rst(1),
     config = Config.syncConfig
   )
 
@@ -488,7 +494,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val sink = Stream(Fragment(CorundumFrame(corundumDataWidth)))
     val source = Stream(Fragment(CorundumFrame(corundumDataWidth)))
 
-    val rx = BlackwireReceiveDual(busconfig, cryptoCD = cryptoClockDomain, include_chacha = true)
+    val rx = BlackwireReceiveDual(busconfig, cryptoCD = rxCryptoClockDomain, include_chacha = true)
     rx.io.sink << sink
     source << rx.io.source
     rx.io.ctrl_rxkey << packetRxAxi4SharedBusRxKey.toAxi4()
