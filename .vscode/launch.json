@@ -33,7 +33,7 @@
               "monitor reset halt",
               //"file software/c/finka/hello_world/build/hello_world.elf",
               "file software/c/finka/pico-hello/build/pico-hello.elf",
-              //"file ../wg_lwip/build-riscv/echop",
+              //"file ../lwip-wireguard/build-riscv/echop",
               "break mem_malloc",
               "break mem_free",
               "load"

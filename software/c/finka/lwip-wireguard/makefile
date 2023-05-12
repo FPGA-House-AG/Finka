@@ -4,7 +4,7 @@ CROSS_COMPILE = riscv32-unknown-elf-
 
 RISCV_GDB=$(CROSS_COMPILE)gdb
 
-OBJDIR = ../../../../../wg_lwip/build-riscv
+OBJDIR = ../../../../../lwip-wireguard/build-riscv
 PROJ_NAME=echop
 
 # Debug the program using GDB, which starts OpenOCD(-VexRiscv) with GDB pipe
