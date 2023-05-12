@@ -494,7 +494,7 @@ class Finka(val config: FinkaConfig) extends Component{
     val sink = Stream(Fragment(CorundumFrame(corundumDataWidth)))
     val source = Stream(Fragment(CorundumFrame(corundumDataWidth)))
 
-    val rx = BlackwireReceiveDual(busconfig, cryptoCD = rxCryptoClockDomain, include_chacha = true)
+    val rx = BlackwireReceiveDual(busconfig, cryptoCD = rxCryptoClockDomain, has_busctrl = true, include_chacha = true)
     rx.io.sink << sink
     source << rx.io.source
     rx.io.ctrl_rxkey << packetRxAxi4SharedBusRxKey.toAxi4()
