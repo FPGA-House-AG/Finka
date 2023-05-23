@@ -434,8 +434,8 @@ class Finka(val config: FinkaConfig) extends Component{
       pcieAxi4SharedBus -> (List(ram.io.axi) ++ peripheralSlaves)
     )
 
-    for (ctrl <- peripheralSlaves) {
-      axiCrossbar.addPipelining(corundumAxi4SharedBus)((crossbar, ctrl) => {
+    for (slave <- peripheralSlaves) {
+      axiCrossbar.addPipelining(slave)((crossbar, ctrl) => {
         crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
         crossbar.writeData            >/-> ctrl.writeData
         crossbar.writeRsp              <-/<  ctrl.writeRsp
