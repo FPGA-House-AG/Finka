@@ -209,6 +209,8 @@ class Finka(val config: FinkaConfig) extends Component{
   val debug = true
   val interruptCount = 4
 
+  val maxPeers = 256
+
   val io = new Bundle{
     // main clock for CPU and AXI interconnect, 250 MHz
     val clk     = in Bool()
@@ -563,13 +565,14 @@ class Finka(val config: FinkaConfig) extends Component{
   // rx and tx
   val packetRxTx = new ClockingArea(axiClockDomain) {
     // IP lookup updated/written by RISC-V
-    val ipl = LookupTop(config = LookupDataConfig(memInitTemplate = None))
+    val peerWidth = log2Up(maxPeers)
+    val ipl = LookupTop(config = LookupDataConfig(resultWidth = peerWidth, memInitTemplate = None), registerInterstage = false)
 
     val rx_ipl = Flow(Bits(32 bits))
     val tx_ipl = Flow(Bits(32 bits))
 
-    val rx_ipl_res = Flow(UInt(11 bits))
-    val tx_ipl_res = Flow(UInt(11 bits))
+    val rx_ipl_res = Flow(UInt(peerWidth bits))
+    val tx_ipl_res = Flow(UInt(peerWidth bits))
 
     val packetRxTxAxi4SharedBusIP = Axi4Shared(busconfig)
     ipl.io.axi/*ctrl_ipl*/ << packetRxTxAxi4SharedBusIP.toAxi4.toLite()
@@ -579,9 +582,9 @@ class Finka(val config: FinkaConfig) extends Component{
     ipl.io.lookup.apply(1) << tx_ipl
     // IP address lookup results returned to RX and TX paths
     rx_ipl_res.valid   := ipl.io.result.apply(0).valid
-    rx_ipl_res.payload := ipl.io.result.apply(0).lookupResult.location
+    rx_ipl_res.payload := ipl.io.result.apply(0).lookupResult
     tx_ipl_res.valid   := ipl.io.result.apply(1).valid
-    tx_ipl_res.payload := ipl.io.result.apply(1).lookupResult.location
+    tx_ipl_res.payload := ipl.io.result.apply(1).lookupResult
   }
   packetRxTx.packetRxTxAxi4SharedBusIP << axi.packetRxTxAxi4SharedBusIP
   packetRxTx.rx_ipl << packetRx.rx.io.source_ipl
