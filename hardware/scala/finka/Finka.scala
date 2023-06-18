@@ -278,12 +278,13 @@ class Finka(val config: FinkaConfig) extends Component{
 
   val resetCtrl = new ClockingArea(resetCtrlClockDomain) {
     // this reset call also be asserted by the DebugPlugin, if enabled
-    val axiReset     = RegNext(io.rst) //.simPublic()
+    val axiReset        = RegNext(io.rst) //.simPublic()
+    val axiResetDelayed = RegNext(axiReset)
   }
 
   val axiClockDomain = ClockDomain(
     clock = io.clk,
-    reset = resetCtrl.axiReset,
+    reset = resetCtrl.axiResetDelayed,
     frequency = FixedFrequency(axiFrequency),
     config = Config.syncConfig
   )
