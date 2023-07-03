@@ -5,16 +5,19 @@ ThisBuild / organization := "online.blackwire"
 val spinalVersion = "dev"
 val spinalDir = "../SpinalHDL.dev"
 
+val spinalCore = "com.github.spinalhdl" %% "spinalhdl-core" % spinalVersion
+val spinalLib = "com.github.spinalhdl" %% "spinalhdl-lib" % spinalVersion
+val spinalTester = "com.github.spinalhdl" %% "spinalhdl-tester" % spinalVersion
+val spinalIdslPlugin = compilerPlugin("com.github.spinalhdl" %% "spinalhdl-idsl-plugin" % spinalVersion)
+
 lazy val finka = (project in file("."))
   .settings(
     // two lines need to use IDSL plug-in from local ../SpinalHDL/
     scalacOptions += s"-Xplugin:${new File(baseDirectory.value + s"/" + spinalDir + s"/idslplugin/target/scala-2.11/spinalhdl-idsl-plugin_2.11-$spinalVersion.jar")}",
     scalacOptions += s"-Xplugin-require:idsl-plugin",
     libraryDependencies ++= Seq(
-      // three lines replaced by dependsOn(spinal*, ...) below
-      //"com.github.spinalhdl" % "spinalhdl-core_2.11" % spinalVersion,
-      //"com.github.spinalhdl" % "spinalhdl-lib_2.11" % spinalVersion,
-      //compilerPlugin("com.github.spinalhdl" % "spinalhdl-idsl-plugin_2.11" % spinalVersion),
+      // one line replaced by dependsOn(local*, ...) below
+      //libraryDependencies ++= Seq(spinalCore, spinalLib, spinalTester, spinalIdslPlugin)
       "org.scalatest" %% "scalatest" % "3.2.5",
       "org.yaml" % "snakeyaml" % "1.8"
     ),
@@ -25,17 +28,20 @@ lazy val finka = (project in file("."))
   .dependsOn(vexRiscv)
   .dependsOn(spinalCorundum)
   .dependsOn(blackwireSpinal)
-  .dependsOn(spinalHdlIdslPlugin, spinalHdlSim, spinalHdlCore, spinalHdlLib)
+  .dependsOn(localHdlIdslPlugin, localHdlSim, localHdlCore, localHdlLib, localHdlTester)
+  .dependsOn(scalablePipelinedLookup)
 
 lazy val vexRiscv = ProjectRef(file("../VexRiscv.pinned"), "root") // c52433575dec04f10063b2fd7cebd0545c8b1be9
 lazy val spinalCorundum = ProjectRef(file("../SpinalCorundum"), "spinalCorundum")
 lazy val blackwireSpinal = ProjectRef(file("../BlackwireSpinal"), "blackwireSpinal")
+lazy val scalablePipelinedLookup = ProjectRef(file("../scalable-pipelined-lookup-fpga"), "scalablePipelinedLookup")
 
-// git clone --branch dev git@github.com:likewise/SpinalHDL.git && cd SpinalHDL && git checkout 419c87b0285c77c823973badc5451db0ef0791b6
-lazy val spinalHdlCore = ProjectRef(file(spinalDir), "core") 
-lazy val spinalHdlLib = ProjectRef(file(spinalDir), "lib")
-lazy val spinalHdlIdslPlugin = ProjectRef(file(spinalDir), "idslplugin")
-lazy val spinalHdlSim = ProjectRef(file(spinalDir), "sim")
+// local checkout of SpinalHDL (dev)
+lazy val localHdlIdslPlugin = ProjectRef(file(spinalDir), "idslplugin")
+lazy val localHdlCore = ProjectRef(file(spinalDir), "core") 
+lazy val localHdlLib = ProjectRef(file(spinalDir), "lib")
+lazy val localHdlSim = ProjectRef(file(spinalDir), "sim")
+lazy val localHdlTester = ProjectRef(file(spinalDir), "tester")
 
 fork := true
 // forward standard input of the sbt process to the forked process
