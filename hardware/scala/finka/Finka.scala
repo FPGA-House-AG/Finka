@@ -393,10 +393,9 @@ class Finka(val config: FinkaConfig) extends Component{
       packetRxAxi4SharedBusReader     -> (0x00C02000L, 4 kB),
       /* packet TX packet header configuration slave */
       packetTxAxi4SharedBusPktHdr     -> (0x00C03000L, 4 kB),
-
+      /* X25519 accelerator */
       ////accelAxi4SharedBusX25519        -> (0x00C05000L, 4 kB),
       /* RX TX Allowed IP address lookup */
-      /* X25519 accelerator */
       packetRxTxAxi4SharedBusIP       -> (0x00C06000L, 4 kB),
       /* packet TX nonce counter lookup table */
       packetTxAxi4SharedBusTxCounter  -> (0x00C10000L, 4 kB),
@@ -424,7 +423,7 @@ class Finka(val config: FinkaConfig) extends Component{
       apbBridge.io.axi, corundumAxi4SharedBus, packetTxAxi4SharedBusWriter, packetRxAxi4SharedBusReader,
       packetTxAxi4SharedBusPktHdr, packetRxAxi4SharedBusSession, packetRxAxi4SharedBusRxKey, packetTxAxi4SharedBusTxKey,
       packetTxAxi4SharedBusP2S, packetTxAxi4SharedBusP2EP, packetTxAxi4SharedBusL2R,
-      packetTxAxi4SharedBusTxCounter/*, accelAxi4SharedBusX25519*/, packetRxTxAxi4SharedBusIP)
+      packetTxAxi4SharedBusTxCounter/*, ////accelAxi4SharedBusX25519*/, packetRxTxAxi4SharedBusIP)
 
     // sparse AXI4Shared crossbar
     // left side master, then for each master a List of accessible slaves on the right side
