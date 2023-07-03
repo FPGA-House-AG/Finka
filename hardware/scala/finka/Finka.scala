@@ -568,6 +568,9 @@ class Finka(val config: FinkaConfig) extends Component{
     val peerWidth = log2Up(maxPeers)
     val ipl = LookupTop(config = LookupDataConfig(resultWidth = peerWidth, memInitTemplate = None), registerInterstage = false)
 
+    printf("ipl.io.lookup.valid, ipl.io.result.valid latency = %d clock cycles.\n",
+      LatencyAnalysis(ipl.io.lookup.apply(0).valid, ipl.io.result.apply(0).valid))
+
     val rx_ipl = Flow(Bits(32 bits))
     val tx_ipl = Flow(Bits(32 bits))
 
