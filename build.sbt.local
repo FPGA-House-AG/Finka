@@ -32,7 +32,7 @@ lazy val finka = (project in file("."))
   .dependsOn(localHdlIdslPlugin, localHdlSim, localHdlCore, localHdlLib, localHdlTester)
   .dependsOn(scalablePipelinedLookup)
 
-lazy val vexRiscv = ProjectRef(file("../VexRiscv.pinned"), "root") // c52433575dec04f10063b2fd7cebd0545c8b1be9
+lazy val vexRiscv = ProjectRef(file("../VexRiscv"), "root") // c52433575dec04f10063b2fd7cebd0545c8b1be9
 lazy val spinalCorundum = ProjectRef(file("../SpinalCorundum"), "spinalCorundum")
 lazy val blackwireSpinal = ProjectRef(file("../BlackwireSpinal"), "blackwireSpinal")
 lazy val scalablePipelinedLookup = ProjectRef(file("../scalable-pipelined-lookup-fpga"), "scalablePipelinedLookup")
