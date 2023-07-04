@@ -3,10 +3,11 @@ ThisBuild / scalaVersion := "2.11.12"
 ThisBuild / organization := "online.blackwire"
 
 val spinalVersion = "dev"
-val spinalDir = "../SpinalHDL.dev"
+val spinalDir = "../SpinalHDL"
 
 val spinalCore = "com.github.spinalhdl" %% "spinalhdl-core" % spinalVersion
 val spinalLib = "com.github.spinalhdl" %% "spinalhdl-lib" % spinalVersion
+val spinalSim = "com.github.spinalhdl" %% "spinalhdl-sim" % spinalVersion
 val spinalTester = "com.github.spinalhdl" %% "spinalhdl-tester" % spinalVersion
 val spinalIdslPlugin = compilerPlugin("com.github.spinalhdl" %% "spinalhdl-idsl-plugin" % spinalVersion)
 
@@ -17,7 +18,7 @@ lazy val finka = (project in file("."))
     scalacOptions += s"-Xplugin-require:idsl-plugin",
     libraryDependencies ++= Seq(
       // one line replaced by dependsOn(local*, ...) below
-      //libraryDependencies ++= Seq(spinalCore, spinalLib, spinalTester, spinalIdslPlugin)
+      //libraryDependencies ++= Seq(spinalIdslPlugin, spinalCore, spinalLib, spinalSim, spinalTester)
       "org.scalatest" %% "scalatest" % "3.2.5",
       "org.yaml" % "snakeyaml" % "1.8"
     ),
