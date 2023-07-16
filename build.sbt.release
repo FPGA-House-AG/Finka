@@ -12,7 +12,7 @@ val spinalIdslPlugin = compilerPlugin("com.github.spinalhdl" %% "spinalhdl-idsl-
 
 lazy val finka = (project in file("."))
   .settings(
-    libraryDependencies ++= Seq(spinalIdslPlugin, spinalCore, spinalLib, spinalSim, spinalTester)
+    libraryDependencies ++= Seq(spinalIdslPlugin, spinalCore, spinalLib, spinalSim, spinalTester),
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % "3.2.5",
       "org.yaml" % "snakeyaml" % "1.8"

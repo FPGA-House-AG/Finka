@@ -14,10 +14,6 @@ lazy val finka = (project in file("."))
   .settings(
     libraryDependencies ++= Seq(spinalIdslPlugin, spinalCore, spinalLib, spinalSim, spinalTester),
     libraryDependencies ++= Seq(
-      //"com.github.spinalhdl" % "spinalhdl-core_2.11" % spinalVersion,
-      //"com.github.spinalhdl" % "spinalhdl-lib_2.11" % spinalVersion,
-      //"com.github.spinalhdl" % "spinalhdl-sim_2.11" % spinalVersion,
-      //compilerPlugin("com.github.spinalhdl" % "spinalhdl-idsl-plugin_2.11" % spinalVersion),
       "org.scalatest" %% "scalatest" % "3.2.5",
       "org.yaml" % "snakeyaml" % "1.8"
     ),
@@ -30,8 +26,8 @@ lazy val finka = (project in file("."))
   .dependsOn(blackwireSpinal)
   .dependsOn(scalablePipelinedLookup)
 
+//lazy val vexRiscv = RootProject(uri("https://github.com/SpinalHDL/VexRiscv.git#f0bb6e94e4be6eeccade29210263c5ff305fc227"))
 lazy val vexRiscv = RootProject(uri("https://github.com/SpinalHDL/VexRiscv.git#c52433575dec04f10063b2fd7cebd0545c8b1be9"))
-//lazy val vexRiscv = RootProject(file("../VexRiscv.pinned"))
 
 lazy val spinalCorundum = ProjectRef(file("../SpinalCorundum"), "spinalCorundum")
 lazy val blackwireSpinal = ProjectRef(file("../BlackwireSpinal"), "blackwireSpinal")
