@@ -2,7 +2,7 @@ ThisBuild / version := "1.0"
 ThisBuild / scalaVersion := "2.11.12"
 ThisBuild / organization := "online.blackwire"
 
-val spinalVersion = "1.9.0"
+val spinalVersion = "1.9.1"
 
 val spinalCore = "com.github.spinalhdl" %% "spinalhdl-core" % spinalVersion
 val spinalLib = "com.github.spinalhdl" %% "spinalhdl-lib" % spinalVersion
@@ -27,7 +27,7 @@ lazy val finka = (project in file("."))
   .dependsOn(scalablePipelinedLookup)
 
 //lazy val vexRiscv = RootProject(uri("https://github.com/SpinalHDL/VexRiscv.git#f0bb6e94e4be6eeccade29210263c5ff305fc227"))
-lazy val vexRiscv = RootProject(uri("https://github.com/SpinalHDL/VexRiscv.git#c52433575dec04f10063b2fd7cebd0545c8b1be9"))
+lazy val vexRiscv = RootProject(uri("https://github.com/SpinalHDL/VexRiscv.git#1721ac253e9d05244ba304380efadd56d2e0e684"))
 
 lazy val spinalCorundum = ProjectRef(file("../SpinalCorundum"), "spinalCorundum")
 lazy val blackwireSpinal = ProjectRef(file("../BlackwireSpinal"), "blackwireSpinal")
