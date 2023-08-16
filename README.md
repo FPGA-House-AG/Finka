@@ -1,8 +1,11 @@
-Finka is the soft-core SoC in the Blackwire PoC.
+Finka is the soft-core SoC of Blackwire.
 
-The SoC is based around the VexRiscv RISC-V CPU. This is written in
-SpinalHDL. The SoC is designed in SpinalHDL as well (after it was
-proven much more productive than doing this any other way).
+The SoC is based around the VexRiscv RISC-V CPU
+
+This SoC also defines the top-level Ethernet AXI Streaming
+interfaces, as it muxes of the non-WireGuard-Type4 messages
+into externally implemented (HDL/RTL) data paths, and the
+other ARP, WireGuard Type-1-2-3 traffic to/from the CPU.
 
 ## TESTING
 
